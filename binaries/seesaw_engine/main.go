@@ -23,6 +23,8 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"os/user"
+	"strconv"
 	"time"
 
 	"github.com/google/seesaw/common/seesaw"
@@ -43,6 +45,10 @@ var (
 		"Seesaw NCC socket")
 	socketPath = flag.String("socket", config.DefaultEngineConfig().SocketPath,
 		"Seesaw Engine socket")
+	runUser = flag.String("user", "seesaw",
+		"User to run the engine as after initialization")
+	noDropPrivileges = flag.Bool("no_drop_privileges", false,
+		"If true, do not drop privileges (run as current user)")
 )
 
 // cfgOpt returns the configuration option from the specified section. If the
@@ -217,10 +223,35 @@ func main() {
 		log.Exitf("Failed to remove socket: %v", err)
 	}
 
+	// Resolve target user for privilege dropping and run directory ownership.
+	var uid, gid int
+	if !*noDropPrivileges {
+		u, err := user.Lookup(*runUser)
+		if err != nil {
+			log.Exitf("Failed to look up user %q: %v", *runUser, err)
+		}
+		uid, err = strconv.Atoi(u.Uid)
+		if err != nil {
+			log.Exitf("Invalid UID for user %q: %v", *runUser, err)
+		}
+		gid, err = strconv.Atoi(u.Gid)
+		if err != nil {
+			log.Exitf("Invalid GID for user %q: %v", *runUser, err)
+		}
+	}
+
 	// Gentlemen, start your engines...
 	engine := engine.NewEngine(&engineCfg)
 	server.ShutdownHandler(engine)
-	server.ServerRunDirectory("engine", 0, 0)
-	// TODO(jsing): Drop privileges before starting engine.
+	server.ServerRunDirectory("engine", uid, gid)
+
+	// Drop privileges before starting engine.
+	if !*noDropPrivileges {
+		if err := server.DropPrivileges(*runUser); err != nil {
+			log.Exitf("Failed to drop privileges: %v", err)
+		}
+		log.Infof("Dropped privileges to user %q (uid=%d, gid=%d)", *runUser, uid, gid)
+	}
+
 	engine.Run()
 }

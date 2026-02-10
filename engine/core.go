@@ -22,6 +22,8 @@ transitions and providing communication between Seesaw v2 components.
 package engine
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -254,6 +256,29 @@ func (e *Engine) engineIPC() {
 	e.shutdownIPC <- true
 }
 
+// syncTLSConfig returns a TLS configuration for use by the sync server and client.
+func (e *Engine) syncTLSConfig() (*tls.Config, error) {
+	caCert, err := os.ReadFile(e.config.CACertFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CA cert file: %v", err)
+	}
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(caCert) {
+		return nil, fmt.Errorf("failed to load CA certificates")
+	}
+	cert, err := tls.LoadX509KeyPair(e.config.CertFile, e.config.KeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load X.509 key pair: %v", err)
+	}
+	return &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      caCertPool,
+		ClientCAs:    caCertPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		MinVersion:   tls.VersionTLS12,
+	}, nil
+}
+
 // syncRPC starts a server to handle synchronisation RPCs via a TCP socket.
 func (e *Engine) syncRPC() {
 	// TODO(jsing): Make this default to IPv6, if configured.
@@ -266,7 +291,13 @@ func (e *Engine) syncRPC() {
 		log.Fatalf("Listen failed: %v", err)
 	}
 
-	go e.syncServer.serve(ln)
+	tlsConfig, err := e.syncTLSConfig()
+	if err != nil {
+		log.Fatalf("Failed to create sync TLS config: %v", err)
+	}
+	tlsListener := tls.NewListener(ln, tlsConfig)
+
+	go e.syncServer.serve(tlsListener)
 
 	<-e.shutdownRPC
 	ln.Close()

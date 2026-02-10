@@ -31,6 +31,8 @@ var defaultEngineConfig = EngineConfig{
 	AnycastEnabled:          true,
 	BGPUpdateInterval:       15 * time.Second,
 	CACertFile:              path.Join(seesaw.ConfigPath, "ssl", "ca.crt"),
+	CertFile:                path.Join(seesaw.ConfigPath, "ssl", "seesaw.crt"),
+	KeyFile:                 path.Join(seesaw.ConfigPath, "ssl", "seesaw.key"),
 	ConfigFile:              path.Join(seesaw.ConfigPath, "seesaw.cfg"),
 	ConfigInterval:          1 * time.Minute,
 	ConfigServers:           []string{"seesaw-config.example.com"},
@@ -65,6 +67,8 @@ type EngineConfig struct {
 	AnycastEnabled          bool          // Flag to enable or disable anycast.
 	BGPUpdateInterval       time.Duration // The BGP update interval.
 	CACertFile              string        // The path to the SSL/TLS CA cert file.
+	CertFile                string        // The path to the SSL/TLS certificate file.
+	KeyFile                 string        // The path to the SSL/TLS key file.
 	ClusterFile             string        // The path to the cluster protobuf file.
 	ClusterName             string        // The name of the cluster the engine is running in.
 	ClusterVIP              seesaw.Host   // The VIP for this Seesaw Cluster.

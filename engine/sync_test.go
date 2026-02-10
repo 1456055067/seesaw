@@ -17,9 +17,19 @@
 package engine
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"math/big"
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -61,29 +71,114 @@ func (tsd *testNoteDispatcher) nextNote() (*SyncNote, error) {
 	}
 }
 
-func newSyncTest() (*net.TCPListener, *syncClient, *syncServer, *testNoteDispatcher, error) {
+// generateTestCerts creates a self-signed CA and node certificate in a temp
+// directory and returns the directory path. The caller should defer os.RemoveAll
+// on the returned path.
+func generateTestCerts(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+
+	// Generate CA key and self-signed cert.
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("Failed to generate CA key: %v", err)
+	}
+	caTemplate := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Test CA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	}
+	caCertDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
+	if err != nil {
+		t.Fatalf("Failed to create CA certificate: %v", err)
+	}
+	writePEM(t, filepath.Join(dir, "ca.crt"), "CERTIFICATE", caCertDER)
+
+	// Generate node key and cert signed by the CA.
+	nodeKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("Failed to generate node key: %v", err)
+	}
+	nodeTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      pkix.Name{CommonName: "localhost"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
+	}
+	caCert, err := x509.ParseCertificate(caCertDER)
+	if err != nil {
+		t.Fatalf("Failed to parse CA certificate: %v", err)
+	}
+	nodeCertDER, err := x509.CreateCertificate(rand.Reader, nodeTemplate, caCert, &nodeKey.PublicKey, caKey)
+	if err != nil {
+		t.Fatalf("Failed to create node certificate: %v", err)
+	}
+	writePEM(t, filepath.Join(dir, "seesaw.crt"), "CERTIFICATE", nodeCertDER)
+
+	nodeKeyDER, err := x509.MarshalECPrivateKey(nodeKey)
+	if err != nil {
+		t.Fatalf("Failed to marshal node key: %v", err)
+	}
+	writePEM(t, filepath.Join(dir, "seesaw.key"), "EC PRIVATE KEY", nodeKeyDER)
+
+	return dir
+}
+
+func writePEM(t *testing.T, path, typ string, data []byte) {
+	t.Helper()
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("Failed to create %s: %v", path, err)
+	}
+	defer f.Close()
+	if err := pem.Encode(f, &pem.Block{Type: typ, Bytes: data}); err != nil {
+		t.Fatalf("Failed to write PEM to %s: %v", path, err)
+	}
+}
+
+func newSyncTest(t *testing.T) (net.Listener, *syncClient, *syncServer, *testNoteDispatcher, error) {
+	t.Helper()
 	ln, addr, err := newLocalTCPListener()
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("Failed to create local TCP listener: %v", err)
 	}
 
+	certDir := generateTestCerts(t)
+
 	engine := newTestEngine()
 	engine.config.Node.IPv4Addr = addr.IP
 	engine.config.Peer.IPv4Addr = addr.IP
 	engine.config.SyncPort = addr.Port
+	engine.config.CACertFile = filepath.Join(certDir, "ca.crt")
+	engine.config.CertFile = filepath.Join(certDir, "seesaw.crt")
+	engine.config.KeyFile = filepath.Join(certDir, "seesaw.key")
+
+	tlsConfig, err := engine.syncTLSConfig()
+	if err != nil {
+		ln.Close()
+		return nil, nil, nil, nil, fmt.Errorf("Failed to create TLS config: %v", err)
+	}
+	tlsListener := tls.NewListener(ln, tlsConfig)
 
 	server := newSyncServer(engine)
-	go server.serve(ln)
+	go server.serve(tlsListener)
 
 	client := newSyncClient(engine)
 	dispatcher := newTestNoteDispatcher()
 	client.dispatch = dispatcher.dispatch
 
-	return ln, client, server, dispatcher, nil
+	return tlsListener, client, server, dispatcher, nil
 }
 
 func TestBasicSync(t *testing.T) {
-	ln, client, server, dispatcher, err := newSyncTest()
+	ln, client, server, dispatcher, err := newSyncTest(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +210,7 @@ func TestBasicSync(t *testing.T) {
 }
 
 func TestSyncHeartbeats(t *testing.T) {
-	ln, client, server, dispatcher, err := newSyncTest()
+	ln, client, server, dispatcher, err := newSyncTest(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +270,7 @@ func TestSyncHeartbeats(t *testing.T) {
 }
 
 func TestSyncDesync(t *testing.T) {
-	ln, client, server, dispatcher, err := newSyncTest()
+	ln, client, server, dispatcher, err := newSyncTest(t)
 	if err != nil {
 		t.Fatal(err)
 	}

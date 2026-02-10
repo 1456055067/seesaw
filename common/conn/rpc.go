@@ -18,8 +18,11 @@ package conn
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net/rpc"
+	"os"
+	"path"
 
 	"github.com/google/seesaw/common/ipc"
 	"github.com/google/seesaw/common/seesaw"
@@ -33,22 +36,32 @@ func init() {
 // engineRPC contains the structures necessary for communication with the
 // Seesaw Engine via RPC.
 type engineRPC struct {
-	client *rpc.Client
-	conn   *tls.Conn
-	ctx    *ipc.Context
+	client     *rpc.Client
+	conn       *tls.Conn
+	ctx        *ipc.Context
+	caCertFile string
 }
 
 // newEngineRPC returns a new engine RPC interface.
 func newEngineRPC(ctx *ipc.Context) EngineConn {
-	return &engineRPC{ctx: ctx}
+	return &engineRPC{
+		ctx:        ctx,
+		caCertFile: path.Join(seesaw.ConfigPath, "ssl", "ca.crt"),
+	}
 }
 
 // Dial establishes a connection to the Seesaw Engine.
 func (c *engineRPC) Dial(addr string) error {
-	// TODO(jsing): Configure CA certificate chain and disable insecure
-	// skip verify.
+	caCert, err := os.ReadFile(c.caCertFile)
+	if err != nil {
+		return fmt.Errorf("failed to read CA cert file %q: %v", c.caCertFile, err)
+	}
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(caCert) {
+		return fmt.Errorf("failed to load CA certificates from %q", c.caCertFile)
+	}
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true,
+		RootCAs: certPool,
 	}
 	conn, err := tls.Dial("tcp", addr, tlsConfig)
 	if err != nil {

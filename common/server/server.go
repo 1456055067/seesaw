@@ -24,8 +24,10 @@ import (
 	"net/rpc"
 	"os"
 	"os/signal"
+	"os/user"
 	"path"
 	"runtime"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -111,6 +113,37 @@ func ServerRunDirectory(server string, owner, group int) error {
 	}
 	if err := os.Chmod(serverRunDir, 0770); err != nil {
 		return fmt.Errorf("Failed to change permissions on run directory: %v", err)
+	}
+	return nil
+}
+
+// DropPrivileges drops process privileges to the specified user. The GID is
+// set before the UID, since changing the UID first would prevent changing
+// the GID.
+func DropPrivileges(username string) error {
+	u, err := user.Lookup(username)
+	if err != nil {
+		return fmt.Errorf("failed to look up user %q: %v", username, err)
+	}
+	uid, err := strconv.Atoi(u.Uid)
+	if err != nil {
+		return fmt.Errorf("invalid UID for user %q: %v", username, err)
+	}
+	gid, err := strconv.Atoi(u.Gid)
+	if err != nil {
+		return fmt.Errorf("invalid GID for user %q: %v", username, err)
+	}
+	if err := syscall.Setgid(gid); err != nil {
+		return fmt.Errorf("setgid(%d) failed: %v", gid, err)
+	}
+	if err := syscall.Setuid(uid); err != nil {
+		return fmt.Errorf("setuid(%d) failed: %v", uid, err)
+	}
+	if syscall.Getuid() != uid {
+		return fmt.Errorf("failed to drop UID to %d, current UID is %d", uid, syscall.Getuid())
+	}
+	if syscall.Getgid() != gid {
+		return fmt.Errorf("failed to drop GID to %d, current GID is %d", gid, syscall.Getgid())
 	}
 	return nil
 }

@@ -20,6 +20,7 @@ package engine
 // between Seesaw nodes.
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -261,17 +262,17 @@ func (s *syncServer) newSession(node net.IP) *syncSession {
 	return session
 }
 
-// serve accepts connections from the given TCP listener and dispatches each
+// serve accepts connections from the given listener and dispatches each
 // connection to the RPC server. Connections are only accepted from localhost
 // and the seesaw node that we are configured to peer with.
-func (s *syncServer) serve(l *net.TCPListener) error {
+func (s *syncServer) serve(l net.Listener) error {
 	defer l.Close()
 
 	s.server = rpc.NewServer()
 	s.server.Register(&SeesawSync{s})
 
 	for {
-		c, err := l.AcceptTCP()
+		c, err := l.Accept()
 		if err != nil {
 			if ne, ok := err.(net.Error); ok && ne.Temporary() {
 				time.Sleep(100 * time.Millisecond)
@@ -366,6 +367,14 @@ func (sc *syncClient) dial() error {
 		return nil
 	}
 
+	tlsConfig, err := sc.engine.syncTLSConfig()
+	if err != nil {
+		return fmt.Errorf("failed to create TLS config: %v", err)
+	}
+	// Client-side does not need to require client certs from the server.
+	tlsConfig.ClientAuth = tls.NoClientCert
+	tlsConfig.ClientCAs = nil
+
 	// TODO(jsing): Make this default to IPv6, if configured.
 	peer := &net.TCPAddr{
 		IP:   sc.engine.config.Peer.IPv4Addr,
@@ -378,7 +387,7 @@ func (sc *syncClient) dial() error {
 		Timeout:   time.Second * 2,
 		LocalAddr: self,
 	}
-	conn, err := d.Dial("tcp", peer.String())
+	conn, err := tls.DialWithDialer(&d, "tcp", peer.String(), tlsConfig)
 	if err != nil {
 		return fmt.Errorf("failed to connect: %v", err)
 	}

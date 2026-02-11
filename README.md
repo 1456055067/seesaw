@@ -15,6 +15,152 @@ configuration.
 
 Above all, it is designed to be reliable and easy to maintain.
 
+## Features
+
+### Why Seesaw?
+
+Seesaw fills a unique niche in the load balancing ecosystem, offering enterprise-grade Layer 4 load balancing with high availability and operational simplicity.
+
+#### Layer 4 Load Balancing at Scale
+
+Unlike Layer 7 proxies (HAProxy, Nginx, Envoy), Seesaw operates at the transport layer:
+
+- **Protocol agnostic** — Load balance TCP, UDP, SCTP, AH, and ESP traffic
+- **No protocol parsing** — Minimal CPU overhead, no TLS termination
+- **Kernel-level forwarding** — Uses Linux IPVS for line-rate packet forwarding
+- **Low latency** — Direct routing modes eliminate proxy overhead
+
+This makes Seesaw ideal for:
+- DNS servers
+- Database clusters
+- Game servers (UDP)
+- VPN endpoints
+- Any TCP/UDP service requiring high throughput and low latency
+
+#### High Availability Built-In
+
+- **Active/passive clustering** — Two-node setup with automatic failover via VRRPv3
+- **Sub-second failover** — Typically <1s for master failure detection
+- **Split-brain prevention** — VRRP protocol ensures only one active node
+- **Graceful failover** — Manual failover without dropping connections
+- **Configuration sync** — Automatic peer synchronization
+
+#### Advanced Load Balancing Modes
+
+**Direct Server Return (DSR)** — Default mode for maximum performance
+- Backends respond directly to clients
+- Load balancer only handles inbound traffic
+- Minimal bandwidth and latency impact on the LB
+
+**NAT Mode** — For backends that can't be configured with VIPs
+- Full DNAT/SNAT with connection tracking
+- No backend configuration required
+- Transparent to backend servers
+
+**IP Tunnel Mode** — For geographically distributed backends
+- IP-in-IP encapsulation
+- Backends can be in different datacenters
+
+#### Anycast Support
+
+Native BGP integration for global load balancing:
+
+- **Dynamic route advertisement** — Advertise VIPs when healthy, withdraw when unhealthy
+- **Quagga BGP integration** — Full-featured BGP speaker
+- **Per-vserver control** — Each service can have its own anycast VIP
+- **IPv4 and IPv6** — Dual-stack anycast support
+- **Configurable ranges** — Define custom anycast IP ranges per deployment
+
+Perfect for:
+- Multi-datacenter DNS infrastructure
+- Globally distributed services
+- DDoS mitigation (traffic directed to nearest healthy site)
+
+#### Rich Scheduling Algorithms
+
+- **Round Robin / Weighted Round Robin** — Simple distribution
+- **Least Connections / Weighted Least Connections** — Load-aware routing
+- **Source Hashing** — Consistent client-to-backend mapping
+- **Maglev Hashing** — Google's consistent hashing algorithm (requires kernel 4.18+)
+
+#### Comprehensive Healthchecks
+
+Beyond simple TCP checks:
+
+- **Multiple protocols** — ICMP ping, TCP, UDP, HTTP/HTTPS, DNS, RADIUS, TCP+TLS
+- **DSR/Tunnel mode checks** — Test the full IPVS forwarding path, not just direct connectivity
+- **Flexible thresholds** — Configure server watermarks, retries, and timeout behavior
+- **TLS verification** — Optional certificate validation for HTTPS/TLS checks
+- **Per-port and per-vserver** — Different healthchecks for different service ports
+
+#### Multi-VLAN Support
+
+Serve VIPs across multiple network segments:
+
+- **VLAN sub-interfaces** — eth1.100, eth1.200, etc.
+- **Mixed subnet VIPs** — VIPs don't need to be in the LB interface subnet
+- **Per-VLAN addressing** — Seesaw can have different IPs on each VLAN
+
+#### Centralized Configuration Management
+
+- **Config server** — Optional HTTPS-based central configuration
+- **Automatic reload** — Detects and applies config changes without restart
+- **Peer sync** — Backup node automatically syncs from master
+- **Fallback sources** — Disk → Peer → Server hierarchy
+- **Version tracking** — Configuration change history and metadata
+- **Rate limiting** — Protects against mass vserver changes
+
+#### Operational Excellence
+
+- **Protobuf configuration** — Strongly typed, validated config format
+- **CLI with tab completion** — Interactive shell for monitoring and control
+- **Per-component logging** — Separate logs for engine, HA, healthcheck, NCC, ECU
+- **HTTP monitoring API** — JSON stats endpoint for integration with monitoring systems
+- **Graceful restarts** — Watchdog-managed component lifecycle
+- **Override controls** — Force-enable/disable vservers independent of healthchecks
+
+#### What Seesaw Doesn't Do
+
+To help you choose the right tool:
+
+- **No Layer 7 features** — No HTTP header routing, no TLS termination, no content caching
+- **No load balancing algorithms based on application metrics** — Scheduling is connection-based
+- **No dynamic backend discovery** — Backends are explicitly configured (no Kubernetes service discovery, etc.)
+- **Two-node limit** — Designed for active/passive HA, not horizontal scaling
+
+### Comparison with Other Solutions
+
+| Feature | Seesaw | HAProxy | Nginx | Keepalived + LVS |
+|---------|--------|---------|-------|------------------|
+| Layer 4 LB | ✓ | ✓ | ✓ | ✓ |
+| Layer 7 LB | ✗ | ✓ | ✓ | ✗ |
+| DSR Mode | ✓ | ✗ | ✗ | ✓ |
+| Anycast BGP | ✓ | ✗ | ✗ | Manual |
+| Multi-VLAN | ✓ | ✗ | ✗ | Manual |
+| HA Built-in | ✓ | Manual | Manual | ✓ |
+| Centralized Config | ✓ | ✗ | ✗ | ✗ |
+| Maglev Hashing | ✓ | ✗ | ✗ | ✓ (kernel 4.18+) |
+| Protocol Support | TCP/UDP/SCTP/AH/ESP | TCP/UDP (limited) | TCP/UDP (limited) | TCP/UDP/SCTP/AH/ESP |
+
+**Choose Seesaw when you need:**
+- Layer 4 load balancing with minimal overhead
+- DSR for high-throughput services
+- Anycast integration for multi-site deployments
+- Operational simplicity with built-in HA
+- Non-HTTP protocols (DNS, gaming, VPN, databases)
+
+**Choose HAProxy/Nginx when you need:**
+- Layer 7 routing (HTTP path-based routing, header inspection)
+- TLS termination
+- HTTP/2 or gRPC support
+- Content caching
+- WebSocket handling
+
+**Choose Keepalived+LVS when you need:**
+- Maximum flexibility and control
+- Custom scripting and integration
+- Non-standard deployment patterns
+
 ## Requirements
 
 A Seesaw v2 load balancing cluster requires two Seesaw nodes - these can be

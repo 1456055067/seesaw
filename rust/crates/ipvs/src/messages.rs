@@ -4,7 +4,7 @@
 //! netlink communication with the IPVS kernel module.
 
 use crate::commands::{IPVSCommand, IPVSInfoAttr, IPVSServiceAttr};
-use crate::types::{Protocol, Scheduler, Service};
+use crate::types::{Destination, Protocol, Scheduler, Service};
 use netlink_packet_core::{DecodeError, ParseableParametrized};
 use netlink_packet_generic::{GenlFamily, GenlHeader};
 use netlink_packet_utils::{
@@ -452,6 +452,46 @@ impl Service {
         if self.timeout > 0 {
             nlas.push(ServiceNla::Timeout(self.timeout));
         }
+
+        nlas
+    }
+}
+
+impl crate::types::Destination {
+    /// Convert a Destination to netlink attributes for creation/update.
+    pub(crate) fn to_dest_nlas(&self) -> Vec<DestNla> {
+        let mut nlas = Vec::new();
+
+        // Address
+        let addr_bytes = match self.address {
+            IpAddr::V4(ip) => u32::from(ip).to_be(),
+            IpAddr::V6(_) => {
+                // For now, only support IPv4
+                // TODO: Add IPv6 support later
+                0
+            }
+        };
+        nlas.push(DestNla::Address(addr_bytes));
+
+        // Port
+        nlas.push(DestNla::Port(self.port.to_be()));
+
+        // Weight
+        nlas.push(DestNla::Weight(self.weight as i32));
+
+        // Forwarding method - convert from DestinationFlags
+        let fwd_method = match self.flags {
+            crate::types::DestinationFlags::Masq => 0,    // IP_VS_CONN_F_MASQ
+            crate::types::DestinationFlags::Local => 1,   // IP_VS_CONN_F_LOCALNODE
+            crate::types::DestinationFlags::Tunnel => 2,  // IP_VS_CONN_F_TUNNEL
+            crate::types::DestinationFlags::Route => 3,   // IP_VS_CONN_F_DROUTE
+            crate::types::DestinationFlags::Bypass => 4,  // IP_VS_CONN_F_BYPASS
+        };
+        nlas.push(DestNla::ForwardingMethod(fwd_method));
+
+        // Thresholds
+        nlas.push(DestNla::UpperThreshold(self.upper_threshold));
+        nlas.push(DestNla::LowerThreshold(self.lower_threshold));
 
         nlas
     }

@@ -143,21 +143,45 @@ impl IPVSManager {
     }
 
     /// Add a destination to a service.
-    pub fn add_destination(&mut self, _service: &Service, _dest: &Destination) -> Result<()> {
-        // TODO: Implement IPVS_CMD_NEW_DEST
-        Err(Error::ipvs("Not yet implemented"))
+    pub fn add_destination(&mut self, service: &Service, dest: &Destination) -> Result<()> {
+        let service_nlas = service.to_service_nlas();
+        let dest_nlas = dest.to_dest_nlas();
+        let nlas = vec![
+            IPVSNla::Service(service_nlas),
+            IPVSNla::Dest(dest_nlas),
+        ];
+        let message = IPVSMessage::with_nlas(commands::IPVSCommand::NewDest, nlas);
+
+        let _response = self.socket.send_ipvs_command(message)?;
+        Ok(())
     }
 
     /// Update a destination in a service.
-    pub fn update_destination(&mut self, _service: &Service, _dest: &Destination) -> Result<()> {
-        // TODO: Implement IPVS_CMD_SET_DEST
-        Err(Error::ipvs("Not yet implemented"))
+    pub fn update_destination(&mut self, service: &Service, dest: &Destination) -> Result<()> {
+        let service_nlas = service.to_service_nlas();
+        let dest_nlas = dest.to_dest_nlas();
+        let nlas = vec![
+            IPVSNla::Service(service_nlas),
+            IPVSNla::Dest(dest_nlas),
+        ];
+        let message = IPVSMessage::with_nlas(commands::IPVSCommand::SetDest, nlas);
+
+        let _response = self.socket.send_ipvs_command(message)?;
+        Ok(())
     }
 
     /// Delete a destination from a service.
-    pub fn delete_destination(&mut self, _service: &Service, _dest: &Destination) -> Result<()> {
-        // TODO: Implement IPVS_CMD_DEL_DEST
-        Err(Error::ipvs("Not yet implemented"))
+    pub fn delete_destination(&mut self, service: &Service, dest: &Destination) -> Result<()> {
+        let service_nlas = service.to_service_nlas();
+        let dest_nlas = dest.to_dest_nlas();
+        let nlas = vec![
+            IPVSNla::Service(service_nlas),
+            IPVSNla::Dest(dest_nlas),
+        ];
+        let message = IPVSMessage::with_nlas(commands::IPVSCommand::DelDest, nlas);
+
+        let _response = self.socket.send_ipvs_command(message)?;
+        Ok(())
     }
 }
 

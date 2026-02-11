@@ -25,33 +25,33 @@ func (b *libnlBackend) Init() error {
 }
 
 func (b *libnlBackend) Exit() {
-	Exit()
+	// No additional cleanup needed
 }
 
 func (b *libnlBackend) Flush() error {
 	return Flush()
 }
 
-func (b *libnlBackend) AddService(svc *Service) error {
+func (b *libnlBackend) AddService(svc Service) error {
 	return AddService(svc)
 }
 
-func (b *libnlBackend) UpdateService(svc *Service) error {
+func (b *libnlBackend) UpdateService(svc Service) error {
 	return UpdateService(svc)
 }
 
-func (b *libnlBackend) DeleteService(svc *Service) error {
+func (b *libnlBackend) DeleteService(svc Service) error {
 	return DeleteService(svc)
 }
 
-func (b *libnlBackend) AddDestination(svc *Service, dst *Destination) error {
+func (b *libnlBackend) AddDestination(svc Service, dst Destination) error {
 	return AddDestination(svc, dst)
 }
 
-func (b *libnlBackend) UpdateDestination(svc *Service, dst *Destination) error {
+func (b *libnlBackend) UpdateDestination(svc Service, dst Destination) error {
 	return UpdateDestination(svc, dst)
 }
 
-func (b *libnlBackend) DeleteDestination(svc *Service, dst *Destination) error {
+func (b *libnlBackend) DeleteDestination(svc Service, dst Destination) error {
 	return DeleteDestination(svc, dst)
 }

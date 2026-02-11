@@ -200,8 +200,8 @@ func iptablesRunOutput(af seesaw.AF, argsStr string) (string, error) {
 	}
 	if err != nil {
 		msg := fmt.Sprintf("iptablesRunOutput: '%s %s': %v", cmd, argsStr, err)
-		log.Infof(msg)
-		return "", fmt.Errorf(msg)
+		log.Infof("%s", msg)
+		return "", fmt.Errorf("%s", msg)
 	}
 	return string(out), nil
 }
@@ -247,10 +247,11 @@ func iptablesFlush() error {
 			}
 		}
 	}
-	// NAT is IPv4-only until linux kernel version 3.7.
-	// TODO(angusc): Support IPv6 NAT.
-	if err := iptablesRun(seesaw.IPv4, "--flush -t nat"); err != nil {
-		return err
+	// NAT is supported for both IPv4 and IPv6 (kernel 3.7+).
+	for _, af := range seesaw.AFs() {
+		if err := iptablesRun(af, "--flush -t nat"); err != nil {
+			return err
+		}
 	}
 	return nil
 }

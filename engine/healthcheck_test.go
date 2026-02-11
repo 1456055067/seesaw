@@ -330,7 +330,7 @@ var (
 		53,
 		seesaw.IPProtoUDP,
 		seesaw.HCModePlain,
-		seesaw.HCTypeHTTPS,
+		seesaw.HCTypeHTTP,
 		16767,
 		"HTTP/16767_0",
 	}
@@ -340,7 +340,7 @@ var (
 		53,
 		seesaw.IPProtoUDP,
 		seesaw.HCModePlain,
-		seesaw.HCTypeHTTPS,
+		seesaw.HCTypeHTTP,
 		16767,
 		"HTTP/16767_0",
 	}
@@ -350,7 +350,7 @@ var (
 		53,
 		seesaw.IPProtoUDP,
 		seesaw.HCModePlain,
-		seesaw.HCTypeHTTPS,
+		seesaw.HCTypeHTTP,
 		16767,
 		"HTTP/16767_0",
 	}
@@ -360,7 +360,7 @@ var (
 		53,
 		seesaw.IPProtoUDP,
 		seesaw.HCModeDSR,
-		seesaw.HCTypeHTTPS,
+		seesaw.HCTypeHTTP,
 		16767,
 		"HTTP/16767_0",
 	}
@@ -370,7 +370,7 @@ var (
 		53,
 		seesaw.IPProtoUDP,
 		seesaw.HCModeTUN,
-		seesaw.HCTypeHTTPS,
+		seesaw.HCTypeHTTP,
 		16767,
 		"HTTP/16767_0",
 	}
@@ -388,18 +388,19 @@ var (
 	}
 	hcUpdateHealthcheck2 = config.Healthcheck{
 		Name:      "HTTP/16767_0",
-		Type:      seesaw.HCTypeHTTPS,
+		Type:      seesaw.HCTypeHTTP,
 		Port:      16767,
 		Interval:  10 * time.Second,
 		Timeout:   5 * time.Second,
 		Send:      "/healthz",
 		Receive:   "Ok",
 		Code:      200,
+		Secure:    true,
 		TLSVerify: false,
 	}
 	hcUpdateHealthcheck3 = config.Healthcheck{
 		Name:      "HTTP/16767_0",
-		Type:      seesaw.HCTypeHTTPS,
+		Type:      seesaw.HCTypeHTTP,
 		Port:      16767,
 		Interval:  10 * time.Second,
 		Timeout:   5 * time.Second,
@@ -407,6 +408,7 @@ var (
 		Send:      "https://dns-anycast.example.com/healthz",
 		Receive:   "Ok",
 		Code:      200,
+		Secure:    true,
 		TLSVerify: false,
 	}
 )

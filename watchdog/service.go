@@ -59,8 +59,9 @@ type Service struct {
 	started  chan bool
 	stopped  chan bool
 
-	failures uint64
-	restarts uint64
+	failures      uint64 // consecutive failures (used for backoff)
+	totalFailures uint64 // total failures across lifetime (for monitoring)
+	restarts      uint64
 
 	lastFailure time.Time
 	lastRestart time.Time
@@ -123,6 +124,20 @@ func (svc *Service) SetUser(username string) error {
 		return err
 	}
 	svc.uid = uint32(uid)
+	svc.gid = uint32(gid)
+	return nil
+}
+
+// SetGroup sets the group for the process to run as.
+func (svc *Service) SetGroup(groupname string) error {
+	g, err := user.LookupGroup(groupname)
+	if err != nil {
+		return err
+	}
+	gid, err := strconv.Atoi(g.Gid)
+	if err != nil {
+		return err
+	}
 	svc.gid = uint32(gid)
 	return nil
 }
@@ -253,6 +268,7 @@ func (svc *Service) runOnce() {
 		log.Warningf("Service %s failed to start: %v", svc.name, err)
 		svc.lastFailure = time.Now()
 		svc.failures++
+		svc.totalFailures++
 		null.Close()
 		pw.Close()
 		return
@@ -277,18 +293,18 @@ func (svc *Service) runOnce() {
 		log.Warningf("Service %s wait failed with %v", svc.name, err)
 		svc.lastFailure = time.Now()
 		svc.failures++
+		svc.totalFailures++
 		return
 	}
 	if !state.Success() {
 		log.Warningf("Service %s exited with %v", svc.name, state)
 		svc.lastFailure = time.Now()
 		svc.failures++
+		svc.totalFailures++
 		return
 	}
-	// TODO(jsing): Reset failures after process has been running for some
-	// given duration, so that failures with large intervals do not result
-	// in backoff. However, we also want to count the total number of
-	// failures and export it for monitoring purposes.
+	// Reset backoff counter after a successful run. Total failures are
+	// tracked separately in totalFailures for monitoring purposes.
 	svc.failures = 0
 	log.Infof("Service %s exited normally.", svc.name)
 }
@@ -305,7 +321,13 @@ func (svc *Service) signal(sig os.Signal) error {
 
 // stop stops a running service.
 func (svc *Service) stop() {
-	// TODO(jsing): Check if it is actually running?
+	svc.lock.Lock()
+	if svc.process == nil {
+		svc.lock.Unlock()
+		log.Infof("Service %s is not running, skipping stop", svc.name)
+		return
+	}
+	svc.lock.Unlock()
 	log.Infof("Stopping service %s...", svc.name)
 
 	// Wait for dependents to shutdown.

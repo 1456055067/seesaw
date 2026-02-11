@@ -97,7 +97,8 @@ func bgpTests(ncc client.NCC) {
 
 	// Advertise and withdraw the test-anycast VIP.
 	log.Printf("Advertising and withdrawing VIP %v", testAnycast)
-	if err := ncc.BGPAdvertiseVIP(testAnycast); err != nil {
+	testVIP := seesaw.VIP{IP: seesaw.NewIP(testAnycast), Type: seesaw.AnycastVIP}
+	if err := ncc.BGPAdvertiseVIP(testVIP); err != nil {
 		log.Fatalf("Failed to advertise VIP %v: %v", testAnycast, err)
 	}
 	cfg, err := ncc.BGPConfig()
@@ -115,7 +116,7 @@ func bgpTests(ncc client.NCC) {
 	if !found {
 		log.Fatal("Failed to find network statement")
 	}
-	if err := ncc.BGPWithdrawVIP(testAnycast); err != nil {
+	if err := ncc.BGPWithdrawVIP(testVIP); err != nil {
 		log.Fatalf("Failed to withdraw VIP %v: %v", testAnycast, err)
 	}
 }
@@ -140,9 +141,9 @@ func lbInterface(ncc client.NCC) client.LBInterface {
 		log.Fatalf("Invalid VRID - %q", *vrID)
 	}
 	rtID := uint8(*routingTableID)
-	// TODO(jsing): Change this to allow both IPv4 and IPv6 addresses.
+	clusterVIPv6 := net.ParseIP(*unicastVIPv6Str)
 	lbCfg := &types.LBConfig{
-		ClusterVIP:     seesaw.Host{IPv4Addr: vip},
+		ClusterVIP:     seesaw.Host{IPv4Addr: vip, IPv6Addr: clusterVIPv6},
 		Node:           seesaw.Host{IPv4Addr: nodeIP, IPv6Addr: nodeIPv6},
 		DummyInterface: "dummy0",
 		NodeInterface:  "eth0",

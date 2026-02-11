@@ -243,6 +243,7 @@ func protoToHealthcheck(p *pb.Healthcheck, defaultPort uint16) *Healthcheck {
 		hcMode = seesaw.HCModeTUN
 	}
 	var hcType seesaw.HealthcheckType
+	var secure bool
 	switch p.GetType() {
 	case pb.Healthcheck_ICMP_PING:
 		hcType = seesaw.HCTypeICMP
@@ -253,11 +254,13 @@ func protoToHealthcheck(p *pb.Healthcheck, defaultPort uint16) *Healthcheck {
 	case pb.Healthcheck_HTTP:
 		hcType = seesaw.HCTypeHTTP
 	case pb.Healthcheck_HTTPS:
-		hcType = seesaw.HCTypeHTTPS
+		hcType = seesaw.HCTypeHTTP
+		secure = true
 	case pb.Healthcheck_DNS:
 		hcType = seesaw.HCTypeDNS
 	case pb.Healthcheck_TCP_TLS:
-		hcType = seesaw.HCTypeTCPTLS
+		hcType = seesaw.HCTypeTCP
+		secure = true
 	case pb.Healthcheck_RADIUS:
 		hcType = seesaw.HCTypeRADIUS
 	}
@@ -266,6 +269,7 @@ func protoToHealthcheck(p *pb.Healthcheck, defaultPort uint16) *Healthcheck {
 		port = defaultPort
 	}
 	hc := NewHealthcheck(hcMode, hcType, port)
+	hc.Secure = secure
 	hc.Interval = time.Duration(p.GetInterval()) * time.Second
 	hc.Timeout = time.Duration(p.GetTimeout()) * time.Second
 	hc.Retries = int(p.GetRetries())
@@ -440,8 +444,6 @@ func addVIPSubnets(c *Cluster, p *pb.Cluster) error {
 }
 
 func addVservers(c *Cluster, p *pb.Cluster) error {
-	// TODO: Decide whether to mark VServers with invalid config as broken in
-	// some way, or to propagate the error.
 	for _, vs := range p.Vserver {
 		host := vs.GetEntryAddress()
 		v := NewVserver(vs.GetName(), protoToHost(host))
@@ -467,8 +469,9 @@ func addVservers(c *Cluster, p *pb.Cluster) error {
 			case pb.Protocol_UDP:
 				proto = seesaw.IPProtoUDP
 			default:
-				// TODO(angusc): Consider this VServer broken.
-				log.Errorf("%v: Unsupported IP protocol %v", vs.GetName(), ve.GetProtocol())
+				warning := fmt.Sprintf("unsupported IP protocol %v", ve.GetProtocol())
+				log.Errorf("%v: %s", vs.GetName(), warning)
+				v.Warnings = append(v.Warnings, warning)
 				continue
 			}
 			e := NewVserverEntry(uint16(ve.GetPort()), proto)
@@ -488,8 +491,9 @@ func addVservers(c *Cluster, p *pb.Cluster) error {
 			case pb.VserverEntry_MH:
 				scheduler = seesaw.LBSchedulerMH
 			default:
-				// TODO(angusc): Consider this VServer broken.
-				log.Errorf("%v: Unsupported scheduler %v", vs.GetName(), ve.GetScheduler())
+				warning := fmt.Sprintf("unsupported scheduler %v", ve.GetScheduler())
+				log.Errorf("%v: %s", vs.GetName(), warning)
+				v.Warnings = append(v.Warnings, warning)
 				continue
 			}
 			e.Scheduler = scheduler
@@ -503,8 +507,9 @@ func addVservers(c *Cluster, p *pb.Cluster) error {
 			case pb.VserverEntry_TUN:
 				mode = seesaw.LBModeTUN
 			default:
-				// TODO(angusc): Consider this VServer broken.
-				log.Errorf("%v: Unsupported mode %v", vs.GetName(), ve.GetMode())
+				warning := fmt.Sprintf("unsupported mode %v", ve.GetMode())
+				log.Errorf("%v: %s", vs.GetName(), warning)
+				v.Warnings = append(v.Warnings, warning)
 				continue
 			}
 			e.Mode = mode
@@ -516,8 +521,8 @@ func addVservers(c *Cluster, p *pb.Cluster) error {
 			if e.HighWatermark < e.LowWatermark {
 				e.HighWatermark = e.LowWatermark
 			}
-			e.LThreshold = int(ve.GetLthreshold())
-			e.UThreshold = int(ve.GetUthreshold())
+			e.LowerThreshold = int(ve.GetLthreshold())
+			e.UpperThreshold = int(ve.GetUthreshold())
 			for _, hc := range protosToHealthchecks(ve.Healthcheck, e.Port) {
 				if err := e.AddHealthcheck(hc); err != nil {
 					log.Warning(err)
@@ -531,7 +536,7 @@ func addVservers(c *Cluster, p *pb.Cluster) error {
 			status := backend.GetHost().GetStatus()
 			b := &seesaw.Backend{
 				Host:      protoToHost(backend.GetHost()),
-				Weight:    backend.GetWeight(),
+				Weight:    uint32(backend.GetWeight()),
 				Enabled:   status == pb.Host_PRODUCTION || status == pb.Host_TESTING,
 				InService: status != pb.Host_PROPOSED && status != pb.Host_BUILDING,
 			}

@@ -98,7 +98,15 @@ func newEngineWithNCC(cfg *config.EngineConfig, ncc ncclient.NCC) *Engine {
 		cfg = &defaultCfg
 	}
 
-	// TODO(jsing): Validate node, peer and cluster IP configuration.
+	if cfg.Node.IPv4Addr == nil && cfg.Node.IPv6Addr == nil {
+		log.Fatalf("Node IP configuration is missing (neither IPv4 nor IPv6 set)")
+	}
+	if cfg.Peer.IPv4Addr == nil && cfg.Peer.IPv6Addr == nil {
+		log.Fatalf("Peer IP configuration is missing (neither IPv4 nor IPv6 set)")
+	}
+	if cfg.ClusterVIP.IPv4Addr == nil && cfg.ClusterVIP.IPv6Addr == nil {
+		log.Fatalf("Cluster VIP configuration is missing (neither IPv4 nor IPv6 set)")
+	}
 	engine := &Engine{
 		config:   cfg,
 		fwmAlloc: newMarkAllocator(fwmAllocBase, fwmAllocSize),
@@ -207,10 +215,13 @@ func (e *Engine) haConfig() (*seesaw.HAConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	// TODO(jsing): This does not allow for IPv6-only operation.
+	localAddr := e.config.Node.IPv4Addr
+	if localAddr == nil {
+		localAddr = e.config.Node.IPv6Addr
+	}
 	return &seesaw.HAConfig{
 		Enabled:    n.State != spb.HaState_DISABLED,
-		LocalAddr:  e.config.Node.IPv4Addr,
+		LocalAddr:  localAddr,
 		RemoteAddr: e.config.VRRPDestIP,
 		Priority:   n.Priority,
 		VRID:       e.config.VRID,
@@ -226,14 +237,25 @@ func (e *Engine) thisNode() (*seesaw.Node, error) {
 	if c == nil {
 		return nil, fmt.Errorf("cluster configuration not loaded")
 	}
-	// TODO(jsing): This does not allow for IPv6-only operation.
 	ip := e.config.Node.IPv4Addr
 	for _, n := range c.Nodes {
-		if ip.Equal(n.IPv4Addr) {
+		if ip != nil && ip.Equal(n.IPv4Addr) {
 			return n, nil
 		}
 	}
-	return nil, fmt.Errorf("node %v not configured", ip)
+	// Try IPv6 if no IPv4 match (supports IPv6-only operation).
+	ip6 := e.config.Node.IPv6Addr
+	if ip6 != nil {
+		for _, n := range c.Nodes {
+			if ip6.Equal(n.IPv6Addr) {
+				return n, nil
+			}
+		}
+	}
+	if ip != nil {
+		return nil, fmt.Errorf("node %v not configured", ip)
+	}
+	return nil, fmt.Errorf("node %v not configured", ip6)
 }
 
 // engineIPC starts an RPC server to handle IPC via a Unix Domain socket.
@@ -281,9 +303,12 @@ func (e *Engine) syncTLSConfig() (*tls.Config, error) {
 
 // syncRPC starts a server to handle synchronisation RPCs via a TCP socket.
 func (e *Engine) syncRPC() {
-	// TODO(jsing): Make this default to IPv6, if configured.
+	nodeIP := e.config.Node.IPv4Addr
+	if e.config.Node.IPv6Addr != nil {
+		nodeIP = e.config.Node.IPv6Addr
+	}
 	addr := &net.TCPAddr{
-		IP:   e.config.Node.IPv4Addr,
+		IP:   nodeIP,
 		Port: e.config.SyncPort,
 	}
 	ln, err := net.ListenTCP("tcp", addr)
@@ -353,7 +378,7 @@ func (e *Engine) initAnycast() {
 			log.Fatalf("Failed to add VIP %v: %v", vip, err)
 		}
 		log.Infof("Advertising BGP route for %v", vip)
-		if err := e.ncc.BGPAdvertiseVIP(vip.IP.IP()); err != nil {
+		if err := e.ncc.BGPAdvertiseVIP(*vip); err != nil {
 			log.Fatalf("Failed to advertise VIP %v: %v", vip, err)
 		}
 	}
@@ -460,8 +485,7 @@ func (e *Engine) manager() {
 			// Process new cluster configuration.
 			e.updateVLANs()
 
-			// TODO(jsing): Ensure this does not block.
-			e.updateVservers()
+			go e.updateVservers()
 
 			e.updateARPMap()
 
@@ -634,8 +658,11 @@ func (e *Engine) updateVLANs() {
 		if cluster.VLANs[key] == nil {
 			remove = append(remove, vlan)
 		} else if !vlan.Equal(cluster.VLANs[key]) {
-			// TODO(angusc): This will break any VIPs that are currently configured
-			// on the VLAN interface. Fix!
+			// Unconfigure VIPs on vservers before removing the VLAN to avoid
+			// losing VIP addresses that are configured on the interface.
+			for _, vs := range e.vservers {
+				vs.unconfigureVIPs()
+			}
 			remove = append(remove, vlan)
 			add = append(add, cluster.VLANs[key])
 		}

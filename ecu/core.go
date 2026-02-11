@@ -57,6 +57,7 @@ type Config struct {
 	ECUKeyFile      string
 	EngineSocket    string
 	MonitorAddress  string
+	ServerName      string
 	StatsPublishers []Publisher
 	UpdateInterval  time.Duration
 }
@@ -146,11 +147,14 @@ func (e *ECU) controlTLSConfig() (*tls.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load X.509 key pair: %v", err)
 	}
-	// TODO(jsing): Make the server name configurable.
+	serverName := e.cfg.ServerName
+	if serverName == "" {
+		serverName = "seesaw.example.com"
+	}
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{certs},
 		RootCAs:      rootCACerts,
-		ServerName:   "seesaw.example.com",
+		ServerName:   serverName,
 	}
 	return tlsConfig, nil
 }

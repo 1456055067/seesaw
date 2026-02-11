@@ -18,6 +18,7 @@
 package ha
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -293,8 +294,18 @@ func (n *Node) doMasterTasks() spb.HaState {
 	select {
 	case advert := <-n.recvChannel:
 		if advert.Priority == n.Priority {
-			// TODO(angusc): RFC 5798 says we should compare IP addresses at this point.
-			log.Warningf("doMasterTasks: ignoring advertisement with my priority (%v)", advert.Priority)
+			// Per RFC 5798 section 6.4.3: if priority is equal, compare
+			// primary IP addresses. The node with the higher IP address
+			// remains as master.
+			if n.LocalAddr != nil && n.RemoteAddr != nil &&
+				bytes.Compare(n.RemoteAddr, n.LocalAddr) > 0 {
+				log.Infof("doMasterTasks: peer has same priority (%v) but higher IP - becoming BACKUP",
+					advert.Priority)
+				n.lastMasterAdvertTime = time.Now()
+				return spb.HaState_BACKUP
+			}
+			log.Infof("doMasterTasks: peer has same priority (%v) but lower/equal IP - staying MASTER",
+				advert.Priority)
 			return spb.HaState_LEADER
 		}
 		if advert.Priority > n.Priority {
@@ -318,8 +329,13 @@ func (n *Node) doMasterTasks() spb.HaState {
 func (n *Node) doBackupTasks() spb.HaState {
 	remaining := n.masterDownInterval
 	if !n.lastMasterAdvertTime.IsZero() {
-		deadline := n.lastMasterAdvertTime.Add(n.masterDownInterval)
-		remaining = deadline.Sub(time.Now())
+		// Use time.Since which leverages monotonic clock readings,
+		// making this safe against wall clock adjustments.
+		elapsed := time.Since(n.lastMasterAdvertTime)
+		remaining = n.masterDownInterval - elapsed
+		if remaining < 0 {
+			remaining = 0
+		}
 	}
 	timeout := time.After(remaining)
 	select {
@@ -379,8 +395,8 @@ func (n *Node) queueAdvertisement(advert *advertisement) {
 func (n *Node) sendAdvertisements() {
 	ticker := time.NewTicker(n.MasterAdvertInterval)
 	for {
-		// TODO(angusc): figure out how to make the timing-related logic here, and thoughout, clockjump
-		// safe.
+		// time.NewTicker uses monotonic clock internally, so this is safe
+		// against wall clock adjustments.
 		select {
 		case <-ticker.C:
 			if err := n.conn.send(n.newAdvertisement(), n.MasterAdvertInterval); err != nil {

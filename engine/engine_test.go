@@ -20,11 +20,31 @@ package engine
 // engine tests.
 
 import (
+	"net"
+
+	"github.com/google/seesaw/common/seesaw"
+	"github.com/google/seesaw/engine/config"
 	ncclient "github.com/google/seesaw/ncc/client"
 )
 
 func newTestEngine() *Engine {
-	e := newEngineWithNCC(nil, ncclient.NewDummyNCC())
+	cfg := config.DefaultEngineConfig()
+	cfg.Node = seesaw.Host{
+		Hostname: "seesaw1.example.com",
+		IPv4Addr: net.ParseIP("10.0.0.1"),
+		IPv4Mask: net.CIDRMask(24, 32),
+	}
+	cfg.Peer = seesaw.Host{
+		Hostname: "seesaw2.example.com",
+		IPv4Addr: net.ParseIP("10.0.0.2"),
+		IPv4Mask: net.CIDRMask(24, 32),
+	}
+	cfg.ClusterVIP = seesaw.Host{
+		Hostname: "seesaw-vip.example.com",
+		IPv4Addr: net.ParseIP("10.0.0.100"),
+		IPv4Mask: net.CIDRMask(24, 32),
+	}
+	e := newEngineWithNCC(&cfg, ncclient.NewDummyNCC())
 	e.lbInterface = ncclient.NewDummyLBInterface()
 	return e
 }

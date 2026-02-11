@@ -114,8 +114,8 @@ func ifaceDown(pIface *net.Interface) error {
 
 	// Unlike IPv4, the kernel removes IPv6 addresses when the link goes down. We
 	// don't want that behavior, so we have to preserve the addresses manually.
-	// TODO(angusc): See if we can get a sysctl or something added to the kernel
-	// so we can avoid doing this.
+	// The keep_addr_on_down sysctl (kernel 4.4+) can prevent this, but we
+	// maintain the manual approach for compatibility with older kernels.
 	ipv6Addrs := make(map[string]*net.Interface)
 	ifaces, err := vlanInterfaces(pIface)
 	if err != nil {

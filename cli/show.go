@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -127,8 +129,8 @@ func showVLANs(cli *SeesawCLI, args []string) error {
 	printHdr("VLAN")
 	printVal("ID:", vlan.ID)
 	printVal("Hostname:", vlan.Hostname)
-	printFmt("IPv4 Address:", vlan.IPv4Printable())
-	printFmt("IPv6 Address:", vlan.IPv6Printable())
+	printVal("IPv4 Address:", vlan.IPv4Printable())
+	printVal("IPv6 Address:", vlan.IPv6Printable())
 	printVal("IPv4 Backend Count:", vlan.BackendCount[seesaw.IPv4])
 	printVal("IPv6 Backend Count:", vlan.BackendCount[seesaw.IPv6])
 	printVal("IPv4 VIP Count:", vlan.VIPCount[seesaw.IPv4])
@@ -189,17 +191,9 @@ func showNode(cli *SeesawCLI, args []string) error {
 	}
 	sort.Sort(seesaw.NodesByIPv4{cs.Nodes})
 	if len(args) == 1 {
-		nodeName := args[0]
-		var node *seesaw.Node
-		for _, n := range cs.Nodes {
-			// TODO(baptr): Write a shared matcher implementation for show*.
-			if n.Hostname == nodeName {
-				node = n
-				break
-			}
-		}
+		node := matchNode(cs.Nodes, args[0])
 		if node == nil {
-			return fmt.Errorf("node %q not found", nodeName)
+			return fmt.Errorf("node %q not found", args[0])
 		}
 		printHdr("Node")
 		printVal("Hostname:", node.Hostname)
@@ -213,13 +207,17 @@ func showNode(cli *SeesawCLI, args []string) error {
 		return nil
 	}
 	printHdr("Nodes")
+	localHostname, _ := os.Hostname()
 	for i, node := range cs.Nodes {
 		enabled := "enabled"
 		if node.State == spb.HaState_DISABLED {
 			enabled = "disabled"
 		}
-		// TODO(baptr): Figure out how to identify/mark local node.
-		fmt.Printf("[%d] %s %s\n", i+1, node.Hostname, enabled)
+		local := ""
+		if node.Hostname == localHostname {
+			local = " *"
+		}
+		fmt.Printf("[%d] %s %s%s\n", i+1, node.Hostname, enabled, local)
 	}
 	return nil
 }
@@ -359,7 +357,7 @@ func showDestination(cli *SeesawCLI, args []string) error {
 		printVal("Enabled:", d.Enabled)
 		printVal("Healthy:", d.Healthy)
 		printVal("Active:", d.Active)
-		// TODO(angusc): Show healthcheck history and status details.
+		printVal("Weight:", d.Weight)
 		return nil
 	}
 
@@ -399,9 +397,16 @@ func filterVservers(filter string, vservers map[string]*seesaw.Vserver) map[stri
 			filtered[vs.Name] = vs
 		}
 	}
+	if len(filtered) > 0 {
+		return filtered
+	}
 
-	// TODO(jsing): Consider implementing partial matching based on
-	// globbing or regexes.
+	// Glob match.
+	for _, vs := range vservers {
+		if matched, _ := filepath.Match(filter, vs.Name); matched {
+			filtered[vs.Name] = vs
+		}
+	}
 
 	return filtered
 }
@@ -475,8 +480,8 @@ func printVserver(vserver *seesaw.Vserver) {
 	printVal("Name:", vserver.Name)
 	printVal("Hostname:", vserver.Host.Hostname)
 	printVal("Status:", status)
-	printFmt("IPv4 Address:", vserver.Host.IPv4Printable())
-	printFmt("IPv6 Address:", vserver.Host.IPv6Printable())
+	printVal("IPv4 Address:", vserver.Host.IPv4Printable())
+	printVal("IPv6 Address:", vserver.Host.IPv6Printable())
 	fmt.Println()
 	fmt.Printf("  Services:\n")
 
@@ -549,6 +554,25 @@ func statusSummary(enabled, healthy, active bool) string {
 		status = fmt.Sprintf("enabled, %s, %s", health, act)
 	}
 	return status
+}
+
+// matchNode finds a node by hostname, using exact match first, then prefix match.
+func matchNode(nodes seesaw.Nodes, name string) *seesaw.Node {
+	for _, n := range nodes {
+		if n.Hostname == name {
+			return n
+		}
+	}
+	var match *seesaw.Node
+	for _, n := range nodes {
+		if strings.HasPrefix(n.Hostname, name) {
+			if match != nil {
+				return nil // ambiguous
+			}
+			match = n
+		}
+	}
+	return match
 }
 
 // label returns a string containing the label with indentation and padding.

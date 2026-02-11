@@ -160,8 +160,9 @@ func xcalloc(n, size uint) (unsafe.Pointer, error) {
 	if n < 1 || size < 1 {
 		return nil, errors.New("invalid allocation size")
 	}
-	// TODO(jsing): We should really use C.SIZE_MAX here, however that
-	// currently translates to -1 via cgo...
+	// C.SIZE_MAX is not usable here because cgo translates it to -1
+	// (a known cgo limitation with macro constants). Use ^C.size_t(0)
+	// as the equivalent of SIZE_MAX.
 	if ^C.size_t(0)/C.size_t(n) < C.size_t(size) {
 		return nil, errors.New("integer overflow")
 	}

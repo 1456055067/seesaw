@@ -24,9 +24,20 @@ import (
 	"reflect"
 )
 
-// TODO(jsing): These should be configurable.
+// Default anycast network ranges. These can be overridden via
+// SetAnycastNetworks for deployments using different anycast ranges.
 var _, netIPv4Anycast, _ = net.ParseCIDR("192.168.255.0/24")
 var _, netIPv6Anycast, _ = net.ParseCIDR("2015:cafe:ffff::/64")
+
+// SetAnycastNetworks overrides the default anycast network ranges.
+func SetAnycastNetworks(ipv4, ipv6 *net.IPNet) {
+	if ipv4 != nil {
+		netIPv4Anycast = ipv4
+	}
+	if ipv6 != nil {
+		netIPv6Anycast = ipv6
+	}
+}
 
 var testAnycastHost = Host{
 	Hostname: "test-anycast.example.com",

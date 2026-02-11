@@ -49,10 +49,13 @@ func cfgOpt(cfg *conf.ConfigFile, section, option string) string {
 	return s
 }
 
-// svcOpt returns the specified configuration option for a service.
+// svcOpt returns the specified configuration option for a service,
+// falling back to the [default] section if the option is not set.
 func svcOpt(cfg *conf.ConfigFile, service, option string, required bool) string {
-	// TODO(jsing): Add support for defaults.
 	opt := cfgOpt(cfg, service, option)
+	if opt == "" {
+		opt = cfgOpt(cfg, "default", option)
+	}
 	if opt == "" && required {
 		log.Fatalf("Service %s has missing %s option", service, option)
 	}
@@ -102,7 +105,11 @@ func main() {
 			}
 			svc.SetTermTimeout(tt)
 		}
-		// TODO(angusc): Add support for a "group" option.
+		if group := svcOpt(cfg, name, "group", false); group != "" {
+			if err := svc.SetGroup(group); err != nil {
+				log.Fatalf("Failed to set group for service %s: %v", name, err)
+			}
+		}
 		if user := svcOpt(cfg, name, "user", false); user != "" {
 			if err := svc.SetUser(user); err != nil {
 				log.Fatalf("Failed to set user for service %s: %v", name, err)

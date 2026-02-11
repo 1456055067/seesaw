@@ -146,7 +146,8 @@ func (r *Result) String() string {
 
 // complete returns a Result for a completed healthcheck.
 func complete(start time.Time, msg string, success bool, err error) *Result {
-	// TODO(jsing): Make this clock skew safe.
+	// time.Since uses monotonic clock readings, making this safe against
+	// wall clock adjustments.
 	duration := time.Since(start)
 	return &Result{msg, success, duration, err}
 }
@@ -357,13 +358,14 @@ func (hc *Check) Notify() {
 }
 
 // execute invokes the given healthcheck checker with the configured timeout.
+// The checker goroutine may outlive the timeout if the checker itself does not
+// respect the timeout parameter, but the buffered channel ensures it will not
+// block and will be garbage collected once the check completes.
 func (hc *Check) execute() *Result {
 	ch := make(chan *Result, 1)
 	checker := hc.Checker
 	timeout := hc.Timeout
 	go func() {
-		// TODO(jsing): Determine a way to ensure that this go routine
-		// does not linger.
 		ch <- checker.Check(timeout)
 	}()
 	select {

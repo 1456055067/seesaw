@@ -47,8 +47,8 @@ func (nc *dummyNCC) ARPSendGratuitous(arpMap map[string][]net.IP) error         
 func (nc *dummyNCC) BGPConfig() ([]string, error)                                         { return nil, nil }
 func (nc *dummyNCC) BGPNeighbors() ([]*quagga.Neighbor, error)                            { return nil, nil }
 func (nc *dummyNCC) BGPWithdrawAll() error                                                { return nil }
-func (nc *dummyNCC) BGPAdvertiseVIP(ip net.IP) error                                      { return nil }
-func (nc *dummyNCC) BGPWithdrawVIP(ip net.IP) error                                       { return nil }
+func (nc *dummyNCC) BGPAdvertiseVIP(vip seesaw.VIP) error                                  { return nil }
+func (nc *dummyNCC) BGPWithdrawVIP(vip seesaw.VIP) error                                  { return nil }
 func (nc *dummyNCC) IPVSFlush() error                                                     { return nil }
 func (nc *dummyNCC) IPVSGetServices() ([]*ipvs.Service, error)                            { return nil, nil }
 func (nc *dummyNCC) IPVSGetService(svc *ipvs.Service) (*ipvs.Service, error)              { return nil, nil }

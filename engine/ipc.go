@@ -460,7 +460,7 @@ func (s *SeesawEngine) OverrideVserver(args *ipc.Override, reply *int) error {
 }
 
 // Backends returns a list of currently configured Backends.
-func (s *SeesawEngine) Backends(ctx *ipc.Context, reply *int) error {
+func (s *SeesawEngine) Backends(ctx *ipc.Context, reply *seesaw.BackendMap) error {
 	s.trace("Backends", ctx)
 	if ctx == nil {
 		return errContext
@@ -470,6 +470,21 @@ func (s *SeesawEngine) Backends(ctx *ipc.Context, reply *int) error {
 		return errAccess
 	}
 
-	// TODO(jsing): Implement this function.
-	return fmt.Errorf("Unimplemented")
+	if reply == nil {
+		return fmt.Errorf("BackendMap is nil")
+	}
+	reply.Backends = make(map[string]*seesaw.Backend)
+	s.engine.vserverLock.RLock()
+	for _, vs := range s.engine.vservers {
+		if vs.config == nil {
+			continue
+		}
+		for key, backend := range vs.config.Backends {
+			if _, exists := reply.Backends[key]; !exists {
+				reply.Backends[key] = backend
+			}
+		}
+	}
+	s.engine.vserverLock.RUnlock()
+	return nil
 }

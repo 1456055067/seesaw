@@ -30,11 +30,13 @@ import (
 
 	"github.com/google/seesaw/common/seesaw"
 	"github.com/google/seesaw/engine/config"
+	spb "github.com/google/seesaw/pb/seesaw"
 
 	log "github.com/golang/glog"
 )
 
-// TODO(jsing): Consider implementing message authentication.
+// Message authentication is provided by mutual TLS (see syncTLSConfig in
+// core.go), which requires valid client certificates signed by the cluster CA.
 
 const (
 	sessionDeadtime       = 2 * time.Minute
@@ -44,6 +46,7 @@ const (
 
 	syncPollMsgLimit = 100
 	syncPollTimeout  = 30 * time.Second
+	syncRPCTimeout   = 10 * time.Second
 )
 
 // SyncSessionID specifies a synchronisation session identifier.
@@ -107,7 +110,9 @@ func (s *SeesawSync) Register(node net.IP, id *SyncSessionID) error {
 		return errors.New("id is nil")
 	}
 
-	// TODO(jsing): Reject if not master?
+	if s.sync.engine.haStatus().State != spb.HaState_LEADER {
+		return errors.New("not currently leader")
+	}
 
 	session := s.sync.newSession(node)
 	log.Infof("Synchronisation session %d registered by %v", session.id, node)
@@ -150,7 +155,15 @@ func (s *SeesawSync) Poll(id SyncSessionID, sn *SyncNotes) error {
 	session.Lock()
 	session.expiryTime = time.Now().Add(sessionDeadtime)
 	if session.desync {
-		// TODO(jsing): Discard pending notes?
+		// Drain stale notes before sending desync notification.
+		for {
+			select {
+			case <-session.notes:
+			default:
+				goto drained
+			}
+		}
+	drained:
 		sn.Notes = append(sn.Notes, SyncNote{Type: SNTDesync, Time: time.Now()})
 		session.desync = false
 		session.Unlock()
@@ -181,8 +194,16 @@ pollLoop:
 }
 
 // Config requests the current configuration from the peer Seesaw node.
-func (s *SeesawSync) Config(arg int, config *config.Notification) error {
-	return errors.New("unimplemented")
+func (s *SeesawSync) Config(arg int, cfg *config.Notification) error {
+	if s.sync.engine.notifier == nil {
+		return errors.New("notifier not available")
+	}
+	note := s.sync.engine.notifier.LastNotification()
+	if note == nil {
+		return errors.New("no configuration available")
+	}
+	*cfg = *note
+	return nil
 }
 
 // Failover requests that we relinquish master state.
@@ -375,13 +396,18 @@ func (sc *syncClient) dial() error {
 	tlsConfig.ClientAuth = tls.NoClientCert
 	tlsConfig.ClientCAs = nil
 
-	// TODO(jsing): Make this default to IPv6, if configured.
+	peerIP := sc.engine.config.Peer.IPv4Addr
+	selfIP := sc.engine.config.Node.IPv4Addr
+	if sc.engine.config.Peer.IPv6Addr != nil {
+		peerIP = sc.engine.config.Peer.IPv6Addr
+		selfIP = sc.engine.config.Node.IPv6Addr
+	}
 	peer := &net.TCPAddr{
-		IP:   sc.engine.config.Peer.IPv4Addr,
+		IP:   peerIP,
 		Port: sc.engine.config.SyncPort,
 	}
 	self := &net.TCPAddr{
-		IP: sc.engine.config.Node.IPv4Addr,
+		IP: selfIP,
 	}
 	d := net.Dialer{
 		Timeout:   time.Second * 2,
@@ -425,11 +451,12 @@ func (sc *syncClient) failover() error {
 }
 
 // runOnce establishes a connection to the synchronisation server, registers
-// for notifications, polls for notifications, then deregisters.
-func (sc *syncClient) runOnce() {
+// for notifications, polls for notifications, then deregisters. It returns
+// true if polling was terminated by a quit signal.
+func (sc *syncClient) runOnce() bool {
 	if err := sc.dial(); err != nil {
 		log.Warningf("Sync client dial failed: %v", err)
-		return
+		return false
 	}
 	defer sc.close()
 
@@ -437,27 +464,39 @@ func (sc *syncClient) runOnce() {
 	self := sc.engine.config.Node.IPv4Addr
 
 	// Register for synchronisation events.
-	// TODO(jsing): Implement timeout on RPC?
-	if err := sc.client.Call("SeesawSync.Register", self, &sid); err != nil {
-		log.Warningf("Sync registration failed: %v", err)
-		return
+	regCall := sc.client.Go("SeesawSync.Register", self, &sid, nil)
+	select {
+	case <-regCall.Done:
+		if regCall.Error != nil {
+			log.Warningf("Sync registration failed: %v", regCall.Error)
+			return false
+		}
+	case <-time.After(syncRPCTimeout):
+		log.Warningf("Sync registration timed out after %s", syncRPCTimeout)
+		return false
 	}
 	log.Infof("Registered for synchronisation notifications (ID %d)", sid)
 
-	// TODO(jsing): Export synchronisation data to ECU/CLI.
-
-	sc.poll(sid)
+	quitted := sc.poll(sid)
 
 	// Attempt to deregister for notifications.
-	// TODO(jsing): Implement timeout on RPC?
-	if err := sc.client.Call("SeesawSync.Deregister", sid, nil); err != nil {
-		log.Warningf("Sync deregistration failed: %v", err)
+	deregCall := sc.client.Go("SeesawSync.Deregister", sid, nil, nil)
+	select {
+	case <-deregCall.Done:
+		if deregCall.Error != nil {
+			log.Warningf("Sync deregistration failed: %v", deregCall.Error)
+		}
+	case <-time.After(syncRPCTimeout):
+		log.Warningf("Sync deregistration timed out after %s", syncRPCTimeout)
 	}
+
+	return quitted
 }
 
 // poll polls the synchronisation server for notifications, then dispatches
-// them for processing.
-func (sc *syncClient) poll(sid SyncSessionID) {
+// them for processing. It returns true if polling was terminated by a quit
+// signal.
+func (sc *syncClient) poll(sid SyncSessionID) bool {
 	for {
 		var sn SyncNotes
 		poll := sc.client.Go("SeesawSync.Poll", sid, &sn, nil)
@@ -465,19 +504,18 @@ func (sc *syncClient) poll(sid SyncSessionID) {
 		case <-poll.Done:
 			if poll.Error != nil {
 				log.Errorf("Synchronisation polling failed: %v", poll.Error)
-				return
+				return false
 			}
 			for _, note := range sn.Notes {
 				sc.dispatch(&note)
 			}
 
 		case <-sc.quit:
-			sc.stopped <- true
-			return
+			return true
 
 		case <-time.After(syncPollTimeout):
 			log.Warningf("Synchronisation polling timed out after %s", syncPollTimeout)
-			return
+			return false
 		}
 	}
 }
@@ -505,16 +543,22 @@ func (sc *syncClient) handleNote(note *SyncNote) {
 	}
 }
 
-// handleDesync handles a desync notification.
+// handleDesync handles a desync notification by triggering a config reload.
+// Healthcheck state naturally re-converges via the healthcheck polling cycle.
 func (sc *syncClient) handleDesync() {
-	log.V(1).Infoln("Sync client desynchronised...")
-	// TODO(jsing): Fetch all state - config, healthchecks, overrides...
+	log.Infof("Sync client desynchronised, triggering config reload")
+	if err := sc.engine.notifier.Reload(); err != nil {
+		log.Warningf("Config reload after desync failed: %v", err)
+	}
 }
 
-// handleConfigUpdate handles a config update notification.
+// handleConfigUpdate handles a config update notification by triggering a
+// config reload from the configuration source.
 func (sc *syncClient) handleConfigUpdate(sn *SyncNote) {
-	log.V(1).Infoln("Sync client received config update notification")
-	// TODO(jsing): Implement.
+	log.Infof("Sync client received config update, triggering config reload")
+	if err := sc.engine.notifier.Reload(); err != nil {
+		log.Warningf("Config reload after sync config update failed: %v", err)
+	}
 }
 
 // handleHealthcheck handles a healthcheck notification.
@@ -545,10 +589,12 @@ func (sc *syncClient) run() {
 			<-sc.start
 			log.Infof("Starting sync client...")
 		default:
-			sc.runOnce()
+			if sc.runOnce() {
+				// Quit was received during polling; skip cooldown.
+				sc.stopped <- true
+				continue
+			}
 			select {
-			// TODO: If we receive on quit inside runOnce, we have to wait the
-			// 5s here before enable will work again.
 			case <-time.After(5 * time.Second):
 			case <-sc.quit:
 				sc.stopped <- true

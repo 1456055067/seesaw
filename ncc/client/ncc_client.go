@@ -61,11 +61,11 @@ type NCC interface {
 
 	// BGPAdvertiseVIP requests the Quagga BGP daemon to advertise the
 	// specified VIP.
-	BGPAdvertiseVIP(vip net.IP) error
+	BGPAdvertiseVIP(vip seesaw.VIP) error
 
 	// BGPWithdrawVIP requests the Quagga BGP daemon to withdraw the
 	// specified VIP.
-	BGPWithdrawVIP(vip net.IP) error
+	BGPWithdrawVIP(vip seesaw.VIP) error
 
 	// IPVSFlush flushes all services and destinations from the IPVS table.
 	IPVSFlush() error
@@ -220,13 +220,11 @@ func (nc *nccClient) BGPWithdrawAll() error {
 	return nc.call("SeesawNCC.BGPWithdrawAll", 0, nil)
 }
 
-// TODO(ncope): Use seesaw.VIP here for consistency
-func (nc *nccClient) BGPAdvertiseVIP(vip net.IP) error {
+func (nc *nccClient) BGPAdvertiseVIP(vip seesaw.VIP) error {
 	return nc.call("SeesawNCC.BGPAdvertiseVIP", vip, nil)
 }
 
-// TODO(ncope): Use seesaw.VIP here for consistency
-func (nc *nccClient) BGPWithdrawVIP(vip net.IP) error {
+func (nc *nccClient) BGPWithdrawVIP(vip seesaw.VIP) error {
 	return nc.call("SeesawNCC.BGPWithdrawVIP", vip, nil)
 }
 

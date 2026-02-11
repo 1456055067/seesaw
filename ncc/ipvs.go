@@ -20,6 +20,7 @@ package ncc
 // component.
 
 import (
+	"os/exec"
 	"sync"
 
 	"github.com/google/seesaw/ipvs"
@@ -36,8 +37,13 @@ func initIPVS() {
 	defer ipvsMutex.Unlock()
 	log.Infof("Initialising IPVS...")
 	if err := ipvs.Init(); err != nil {
-		// TODO(jsing): modprobe ip_vs and try again.
-		log.Fatalf("IPVS initialisation failed: %v", err)
+		log.Infof("IPVS init failed, attempting modprobe ip_vs: %v", err)
+		if modErr := exec.Command("/sbin/modprobe", "ip_vs").Run(); modErr != nil {
+			log.Fatalf("IPVS initialisation failed and modprobe ip_vs also failed: init=%v, modprobe=%v", err, modErr)
+		}
+		if err := ipvs.Init(); err != nil {
+			log.Fatalf("IPVS initialisation failed after modprobe ip_vs: %v", err)
+		}
 	}
 	log.Infof("IPVS version %s", ipvs.Version())
 }

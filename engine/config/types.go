@@ -239,8 +239,8 @@ type VserverEntry struct {
 	OnePacket     bool
 	HighWatermark float32
 	LowWatermark  float32
-	LThreshold    int
-	UThreshold    int
+	LowerThreshold    int
+	UpperThreshold    int
 	Healthchecks  map[string]*Healthcheck // by Healthcheck.Key()
 }
 
@@ -279,8 +279,8 @@ func (v *VserverEntry) Snapshot() *seesaw.VserverEntry {
 		OnePacket:     v.OnePacket,
 		HighWatermark: v.HighWatermark,
 		LowWatermark:  v.LowWatermark,
-		LThreshold:    v.LThreshold,
-		UThreshold:    v.UThreshold,
+		LowerThreshold:    v.LowerThreshold,
+		UpperThreshold:    v.UpperThreshold,
 	}
 }
 
@@ -299,6 +299,7 @@ type Healthcheck struct {
 	Code      int           // The expected response code from the backend.
 	Proxy     bool          // Perform healthchecks against an HTTP proxy.
 	Method    string        // The request method for an HTTP/S healthcheck.
+	Secure    bool          // Use TLS for the healthcheck connection.
 	TLSVerify bool          // Do TLS verification.
 }
 

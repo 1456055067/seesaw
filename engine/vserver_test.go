@@ -59,7 +59,7 @@ func newTestBackend(num int) *seesaw.Backend {
 		},
 		Enabled:   true,
 		InService: true,
-		Weight:    int32(num),
+		Weight:    uint32(num),
 	}
 }
 
@@ -115,7 +115,7 @@ var vserverConfig = config.Vserver{
 }
 
 var expectedServices = map[serviceKey]struct {
-	ip            seesaw.IP
+	vip           seesaw.VIP
 	expectedDests []destination
 }{
 	{
@@ -123,7 +123,7 @@ var expectedServices = map[serviceKey]struct {
 		proto: seesaw.IPProtoUDP,
 		port:  53,
 	}: {
-		ip: seesaw.ParseIP("192.168.255.1"),
+		vip: seesaw.VIP{IP: seesaw.ParseIP("192.168.255.1"), Type: seesaw.AnycastVIP},
 		expectedDests: []destination{
 			{destinationKey: newDestinationKey(net.ParseIP("1.1.1.10")), stats: &seesaw.DestinationStats{}},
 			{destinationKey: newDestinationKey(net.ParseIP("1.1.1.11")), stats: &seesaw.DestinationStats{}},
@@ -134,7 +134,7 @@ var expectedServices = map[serviceKey]struct {
 		proto: seesaw.IPProtoTCP,
 		port:  8053,
 	}: {
-		ip: seesaw.ParseIP("192.168.255.1"),
+		vip: seesaw.VIP{IP: seesaw.ParseIP("192.168.255.1"), Type: seesaw.AnycastVIP},
 		expectedDests: []destination{
 			{destinationKey: newDestinationKey(net.ParseIP("1.1.1.10")), stats: &seesaw.DestinationStats{}},
 			{destinationKey: newDestinationKey(net.ParseIP("1.1.1.11")), stats: &seesaw.DestinationStats{}},
@@ -145,7 +145,7 @@ var expectedServices = map[serviceKey]struct {
 		proto: seesaw.IPProtoUDP,
 		port:  53,
 	}: {
-		ip: seesaw.ParseIP("2012::1"),
+		vip: seesaw.VIP{IP: seesaw.ParseIP("2012::1"), Type: seesaw.UnicastVIP},
 		expectedDests: []destination{
 			{destinationKey: newDestinationKey(net.ParseIP("2012::10")), stats: &seesaw.DestinationStats{}},
 			{destinationKey: newDestinationKey(net.ParseIP("2012::11")), stats: &seesaw.DestinationStats{}},
@@ -156,7 +156,7 @@ var expectedServices = map[serviceKey]struct {
 		proto: seesaw.IPProtoTCP,
 		port:  8053,
 	}: {
-		ip: seesaw.ParseIP("2012::1"),
+		vip: seesaw.VIP{IP: seesaw.ParseIP("2012::1"), Type: seesaw.UnicastVIP},
 		expectedDests: []destination{
 			{destinationKey: newDestinationKey(net.ParseIP("2012::10")), stats: &seesaw.DestinationStats{}},
 			{destinationKey: newDestinationKey(net.ParseIP("2012::11")), stats: &seesaw.DestinationStats{}},
@@ -165,14 +165,14 @@ var expectedServices = map[serviceKey]struct {
 }
 
 var expectedFWMServices = map[serviceKey]struct {
-	ip            seesaw.IP
+	vip           seesaw.VIP
 	expectedDests []destination
 }{
 	{
 		af:  seesaw.IPv4,
 		fwm: fwmAllocBase + 0,
 	}: {
-		ip: seesaw.ParseIP("192.168.255.1"),
+		vip: seesaw.VIP{IP: seesaw.ParseIP("192.168.255.1"), Type: seesaw.AnycastVIP},
 		expectedDests: []destination{
 			{destinationKey: newDestinationKey(net.ParseIP("1.1.1.10")), stats: &seesaw.DestinationStats{}},
 			{destinationKey: newDestinationKey(net.ParseIP("1.1.1.11")), stats: &seesaw.DestinationStats{}},
@@ -182,7 +182,7 @@ var expectedFWMServices = map[serviceKey]struct {
 		af:  seesaw.IPv6,
 		fwm: fwmAllocBase + 1,
 	}: {
-		ip: seesaw.ParseIP("2012::1"),
+		vip: seesaw.VIP{IP: seesaw.ParseIP("2012::1"), Type: seesaw.UnicastVIP},
 		expectedDests: []destination{
 			{destinationKey: newDestinationKey(net.ParseIP("2012::10")), stats: &seesaw.DestinationStats{}},
 			{destinationKey: newDestinationKey(net.ParseIP("2012::11")), stats: &seesaw.DestinationStats{}},
@@ -205,9 +205,9 @@ func TestExpandServices(t *testing.T) {
 			t.Errorf("Failed to find service - %#v", sk)
 			continue
 		}
-		if !s.ip.Equal(es.ip) {
+		if s.vip != es.vip {
 			t.Errorf("Service failed to match - got %v, want %v",
-				s.ip, es.ip)
+				s.vip, es.vip)
 		}
 		dsts := vserver.expandDests(s)
 		if len(dsts) != len(es.expectedDests) {
@@ -241,9 +241,9 @@ func TestExpandFWMServices(t *testing.T) {
 			t.Errorf("Failed to find FWM service - %#v", sk)
 			continue
 		}
-		if !s.ip.Equal(es.ip) {
+		if s.vip != es.vip {
 			t.Errorf("FWM service IP failed to match - got %v, want %v",
-				s.ip, es.ip)
+				s.vip, es.vip)
 		}
 		dsts := vserver.expandDests(s)
 		if len(dsts) != len(es.expectedDests) {
@@ -1185,7 +1185,7 @@ var (
 		0,
 		0,
 		seesaw.HCModeDSR,
-		seesaw.HCTypeHTTPS,
+		seesaw.HCTypeHTTP,
 		16767,
 		"HTTP/16767_0",
 	}
@@ -1216,13 +1216,14 @@ var (
 	vsUpdateHealthcheck3 = config.Healthcheck{
 		Name:      "HTTP/16767_0",
 		Mode:      seesaw.HCModeDSR,
-		Type:      seesaw.HCTypeHTTPS,
+		Type:      seesaw.HCTypeHTTP,
 		Port:      16767,
 		Interval:  10 * time.Second,
 		Timeout:   5 * time.Second,
 		Send:      "/healthz",
 		Receive:   "Ok",
 		Code:      200,
+		Secure:    true,
 		TLSVerify: false,
 	}
 	vsUpdateHealthcheck4 = config.Healthcheck{
@@ -1241,13 +1242,14 @@ var (
 	vsUpdateHealthcheck5 = config.Healthcheck{
 		Name:      "HTTP/16767_0",
 		Mode:      seesaw.HCModeDSR,
-		Type:      seesaw.HCTypeHTTPS,
+		Type:      seesaw.HCTypeHTTP,
 		Port:      16767,
 		Interval:  10 * time.Second,
 		Timeout:   5 * time.Second,
 		Send:      "https://dns-anycast.example.com/healthz",
 		Receive:   "Ok",
 		Code:      200,
+		Secure:    true,
 		TLSVerify: false,
 	}
 	updateServiceKey1 = serviceKey{
@@ -1288,7 +1290,7 @@ var updateTests = []struct {
 		expectedServices: []*service{
 			{
 				serviceKey: updateServiceKey1,
-				ip:         seesaw.ParseIP("192.168.255.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.255.1"), Type: seesaw.AnycastVIP},
 				healthy:    true,
 				active:     true,
 			},
@@ -1319,13 +1321,13 @@ var updateTests = []struct {
 		expectedServices: []*service{
 			{
 				serviceKey: updateServiceKey1,
-				ip:         seesaw.ParseIP("192.168.255.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.255.1"), Type: seesaw.AnycastVIP},
 				healthy:    false,
 				active:     false,
 			},
 			{
 				serviceKey: updateServiceKey2,
-				ip:         seesaw.ParseIP("192.168.255.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.255.1"), Type: seesaw.AnycastVIP},
 				healthy:    false,
 				active:     false,
 			},
@@ -1369,13 +1371,13 @@ var updateTests = []struct {
 		expectedServices: []*service{
 			{
 				serviceKey: updateServiceKey1,
-				ip:         seesaw.ParseIP("192.168.255.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.255.1"), Type: seesaw.AnycastVIP},
 				healthy:    true,
 				active:     true,
 			},
 			{
 				serviceKey: updateServiceKey2,
-				ip:         seesaw.ParseIP("192.168.255.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.255.1"), Type: seesaw.AnycastVIP},
 				healthy:    true,
 				active:     true,
 			},
@@ -1400,13 +1402,13 @@ var updateTests = []struct {
 		expectedServices: []*service{
 			{
 				serviceKey: updateServiceKey1,
-				ip:         seesaw.ParseIP("192.168.255.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.255.1"), Type: seesaw.AnycastVIP},
 				healthy:    true,
 				active:     true,
 			},
 			{
 				serviceKey: updateServiceKey2,
-				ip:         seesaw.ParseIP("192.168.255.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.255.1"), Type: seesaw.AnycastVIP},
 				healthy:    true,
 				active:     true,
 			},
@@ -1422,13 +1424,13 @@ var updateTests = []struct {
 		expectedServices: []*service{
 			{
 				serviceKey: updateServiceKey1,
-				ip:         seesaw.ParseIP("192.168.255.99"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.255.99"), Type: seesaw.AnycastVIP},
 				healthy:    false,
 				active:     false,
 			},
 			{
 				serviceKey: updateServiceKey2,
-				ip:         seesaw.ParseIP("192.168.255.99"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.255.99"), Type: seesaw.AnycastVIP},
 				healthy:    false,
 				active:     false,
 			},
@@ -1452,13 +1454,13 @@ var updateTests = []struct {
 		expectedServices: []*service{
 			{
 				serviceKey: updateServiceKey1,
-				ip:         seesaw.ParseIP("192.168.255.99"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.255.99"), Type: seesaw.AnycastVIP},
 				healthy:    false,
 				active:     false,
 			},
 			{
 				serviceKey: updateServiceKey2,
-				ip:         seesaw.ParseIP("192.168.255.99"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.255.99"), Type: seesaw.AnycastVIP},
 				healthy:    false,
 				active:     false,
 			},
@@ -1482,13 +1484,13 @@ var updateTests = []struct {
 		expectedServices: []*service{
 			{
 				serviceKey: updateServiceKey1,
-				ip:         seesaw.ParseIP("192.168.255.99"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.255.99"), Type: seesaw.AnycastVIP},
 				healthy:    false,
 				active:     false,
 			},
 			{
 				serviceKey: updateServiceKey2,
-				ip:         seesaw.ParseIP("192.168.255.99"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.255.99"), Type: seesaw.AnycastVIP},
 				healthy:    false,
 				active:     false,
 			},
@@ -1522,7 +1524,7 @@ var updateTests = []struct {
 		expectedServices: []*service{
 			{
 				serviceKey: updateServiceKey1,
-				ip:         seesaw.ParseIP("192.168.36.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.36.1"), Type: seesaw.UnicastVIP},
 				healthy:    true,
 				active:     true,
 			},
@@ -1553,13 +1555,13 @@ var updateTests = []struct {
 		expectedServices: []*service{
 			{
 				serviceKey: updateServiceKey1,
-				ip:         seesaw.ParseIP("192.168.36.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.36.1"), Type: seesaw.UnicastVIP},
 				healthy:    false,
 				active:     false,
 			},
 			{
 				serviceKey: updateServiceKey2,
-				ip:         seesaw.ParseIP("192.168.36.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.36.1"), Type: seesaw.UnicastVIP},
 				healthy:    false,
 				active:     false,
 			},
@@ -1585,13 +1587,13 @@ var updateTests = []struct {
 		expectedServices: []*service{
 			{
 				serviceKey: updateServiceKey1,
-				ip:         seesaw.ParseIP("192.168.36.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.36.1"), Type: seesaw.UnicastVIP},
 				healthy:    false,
 				active:     false,
 			},
 			{
 				serviceKey: updateServiceKey2,
-				ip:         seesaw.ParseIP("192.168.36.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.36.1"), Type: seesaw.UnicastVIP},
 				healthy:    false,
 				active:     false,
 			},
@@ -1624,13 +1626,13 @@ var updateTests = []struct {
 		expectedServices: []*service{
 			{
 				serviceKey: updateServiceKey1,
-				ip:         seesaw.ParseIP("192.168.36.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.36.1"), Type: seesaw.UnicastVIP},
 				healthy:    true,
 				active:     true,
 			},
 			{
 				serviceKey: updateServiceKey2,
-				ip:         seesaw.ParseIP("192.168.36.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.36.1"), Type: seesaw.UnicastVIP},
 				healthy:    true,
 				active:     true,
 			},
@@ -1655,13 +1657,13 @@ var updateTests = []struct {
 		expectedServices: []*service{
 			{
 				serviceKey: updateServiceKey1,
-				ip:         seesaw.ParseIP("192.168.36.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.36.1"), Type: seesaw.UnicastVIP},
 				healthy:    false,
 				active:     false,
 			},
 			{
 				serviceKey: updateServiceKey2,
-				ip:         seesaw.ParseIP("192.168.36.1"),
+				vip:        seesaw.VIP{IP: seesaw.ParseIP("192.168.36.1"), Type: seesaw.UnicastVIP},
 				healthy:    false,
 				active:     false,
 			},
@@ -1714,9 +1716,9 @@ func compareServiceStates(want []*service, got map[serviceKey]*service) []error 
 			errs = append(errs, fmt.Errorf("Got service <nil>, want %v", wantSvc))
 			continue
 		}
-		if gotSvc.ip != wantSvc.ip {
-			errs = append(errs, fmt.Errorf("Service %v.ip = %v, want %v",
-				gotSvc, gotSvc.ip, wantSvc.ip))
+		if gotSvc.vip != wantSvc.vip {
+			errs = append(errs, fmt.Errorf("Service %v.vip = %v, want %v",
+				gotSvc, gotSvc.vip, wantSvc.vip))
 		}
 		if gotSvc.healthy != wantSvc.healthy {
 			errs = append(errs, fmt.Errorf("Service %v.healthy = %v, want %v",

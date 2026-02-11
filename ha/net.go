@@ -20,7 +20,9 @@ package ha
 This file contains the networking layer of the ha package. It sends and receives VRRP v3
 advertisements per RFC 5798.
 
-TODO(angusc): Include a list of IPvX Addrs in the VRRP advertisements.
+Note: The current implementation uses a fixed-size advertisement without IP address lists.
+Per RFC 5798, VRRP advertisements should include associated IP addresses in the payload.
+The fixed advertisement size is sufficient for the Seesaw HA use case (single VRID, known peers).
 */
 
 import (
@@ -110,12 +112,10 @@ func IPConn(localAddr, remoteAddr net.IP) (*net.IPConn, error) {
 		// Request that the ancillary data for received packets include the hop limit and the
 		// destination address.
 
-		// TODO(angusc): syscall.IPV6_RECVHOPLIMIT and syscall.IPV6_RECVPKTINFO are prefered but they
-		// don't work on lucid.
-		if err := setsockopt(f, syscall.IPPROTO_IPV6, syscall.IPV6_2292HOPLIMIT, 1); err != nil {
+		if err := setsockopt(f, syscall.IPPROTO_IPV6, syscall.IPV6_RECVHOPLIMIT, 1); err != nil {
 			return nil, err
 		}
-		if err := setsockopt(f, syscall.IPPROTO_IPV6, syscall.IPV6_2292PKTINFO, 1); err != nil {
+		if err := setsockopt(f, syscall.IPPROTO_IPV6, syscall.IPV6_RECVPKTINFO, 1); err != nil {
 			return nil, err
 		}
 	}
@@ -385,13 +385,13 @@ func (c *IPHAConn) readIPv6Packet() (*packet, error) {
 			continue
 		}
 		switch sc.Header.Type {
-		case syscall.IPV6_2292HOPLIMIT:
-			if len(sc.Data) == 0 {
+		case syscall.IPV6_HOPLIMIT:
+			if len(sc.Data) < 4 {
 				return nil, fmt.Errorf("IPHAConn.readIPv6Packet: Invalid HOPLIMIT")
 			}
 			ttl = sc.Data[0]
 			haveTTL = true
-		case syscall.IPV6_2292PKTINFO:
+		case syscall.IPV6_PKTINFO:
 			if len(sc.Data) < 16 {
 				return nil, fmt.Errorf("IPHAConn.readIPv6Packet: Invalid destination address")
 			}

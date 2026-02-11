@@ -102,8 +102,7 @@ func (e *ecuStats) run() {
 
 // stats attempts to gather statistics from the Seesaw Engine.
 func (e *ecuStats) stats() (*Stats, error) {
-	// TODO(jsing): Make this untrusted.
-	ctx := ipc.NewTrustedContext(seesaw.SCECU)
+	ctx := ipc.NewContext(seesaw.SCECU)
 	seesawConn, err := conn.NewSeesawIPC(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("connect to engine: %v", err)

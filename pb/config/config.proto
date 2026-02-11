@@ -55,8 +55,9 @@ message Vlan {
   required Host host = 2;
 }
 
-// TODO(angusc): Use different message types for the different healthcheck
-// types.
+// HTTPS and TCP_TLS types are retained for backward compatibility but map to
+// HTTP and TCP with TLS enabled on the Go side. Per-type fields are added as
+// optional extensions (e.g., RADIUS fields below).
 message Healthcheck {
   enum Type {
     ICMP_PING = 1;
@@ -111,6 +112,12 @@ message Healthcheck {
 
   // Number of retries before a healthcheck is considered to have failed.
   optional int32 retries = 12;
+
+  // RADIUS-specific fields (used when type is RADIUS).
+  optional string radius_username = 13;
+  optional string radius_password = 14;
+  optional string radius_secret = 15;
+  optional string radius_response = 16;
 }
 
 enum Protocol {

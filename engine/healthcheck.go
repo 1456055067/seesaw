@@ -288,30 +288,15 @@ func (h *healthcheckManager) newConfig(id healthcheck.Id, key CheckKey, hc *conf
 		if hc.Code != 0 {
 			http.ResponseCode = hc.Code
 		}
+		http.Secure = hc.Secure
+		if hc.Secure {
+			http.TLSVerify = hc.TLSVerify
+		}
 		http.Proxy = hc.Proxy
 		if hc.Method != "" {
 			http.Method = hc.Method
 		}
 		checker = http
-	case seesaw.HCTypeHTTPS:
-		https := healthcheck.NewHTTPChecker(ip, port)
-		target = &https.Target
-		if hc.Send != "" {
-			https.Request = hc.Send
-		}
-		if hc.Receive != "" {
-			https.Response = hc.Receive
-		}
-		if hc.Code != 0 {
-			https.ResponseCode = hc.Code
-		}
-		https.Secure = true
-		https.TLSVerify = hc.TLSVerify
-		https.Proxy = hc.Proxy
-		if hc.Method != "" {
-			https.Method = hc.Method
-		}
-		checker = https
 	case seesaw.HCTypeICMP:
 		// DSR or TUN cannot be used with ICMP (at least for now).
 		if key.HealthcheckMode != seesaw.HCModePlain {
@@ -323,11 +308,15 @@ func (h *healthcheckManager) newConfig(id healthcheck.Id, key CheckKey, hc *conf
 	case seesaw.HCTypeRADIUS:
 		radius := healthcheck.NewRADIUSChecker(ip, port)
 		target = &radius.Target
-		// TODO(jsing): Ugly hack since we do not currently have
-		// separate protobuf messages for each healthcheck type...
+		// RADIUS credentials are packed into the generic Send field as
+		// "username:password:secret". Per-type fields are defined in
+		// config.proto but require protoc regeneration to use natively.
 		send := strings.Split(hc.Send, ":")
 		if len(send) != 3 {
-			return nil, errors.New("RADIUS healthcheck has invalid send value")
+			return nil, fmt.Errorf("RADIUS healthcheck send must be 'username:password:secret', got %d parts", len(send))
+		}
+		if send[0] == "" || send[1] == "" || send[2] == "" {
+			return nil, errors.New("RADIUS healthcheck username, password, and secret must all be non-empty")
 		}
 		radius.Username = send[0]
 		radius.Password = send[1]
@@ -341,14 +330,10 @@ func (h *healthcheckManager) newConfig(id healthcheck.Id, key CheckKey, hc *conf
 		target = &tcp.Target
 		tcp.Send = hc.Send
 		tcp.Receive = hc.Receive
-		checker = tcp
-	case seesaw.HCTypeTCPTLS:
-		tcp := healthcheck.NewTCPChecker(ip, port)
-		target = &tcp.Target
-		tcp.Send = hc.Send
-		tcp.Receive = hc.Receive
-		tcp.Secure = true
-		tcp.TLSVerify = hc.TLSVerify
+		tcp.Secure = hc.Secure
+		if hc.Secure {
+			tcp.TLSVerify = hc.TLSVerify
+		}
 		checker = tcp
 	case seesaw.HCTypeUDP:
 		udp := healthcheck.NewUDPChecker(ip, port)

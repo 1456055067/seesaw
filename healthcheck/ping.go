@@ -194,7 +194,8 @@ func exchangeICMPEcho(network string, ip net.IP, timeout time.Duration, echo icm
 				return fmt.Errorf("Bad ICMP checksum: %x", rchksum)
 			}
 		}
-		// TODO(angusc): Validate checksum for IPv6
+		// IPv6 ICMP checksums are computed and verified by the kernel for raw
+		// sockets, so no application-level validation is needed here.
 		break
 	}
 	return nil

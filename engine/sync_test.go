@@ -30,8 +30,11 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	spb "github.com/google/seesaw/pb/seesaw"
 )
 
 func newLocalTCPListener() (*net.TCPListener, *net.TCPAddr, error) {
@@ -153,6 +156,9 @@ func newSyncTest(t *testing.T) (net.Listener, *syncClient, *syncServer, *testNot
 	certDir := generateTestCerts(t)
 
 	engine := newTestEngine()
+	engine.haManager.statusLock.Lock()
+	engine.haManager.status.State = spb.HaState_LEADER
+	engine.haManager.statusLock.Unlock()
 	engine.config.Node.IPv4Addr = addr.IP
 	engine.config.Peer.IPv4Addr = addr.IP
 	engine.config.SyncPort = addr.Port
@@ -253,8 +259,9 @@ func TestSyncHeartbeats(t *testing.T) {
 
 	n, err := dispatcher.nextNote()
 	if err != nil {
-		// TODO: Confirm it's a timeout?
-		t.Logf("After flushing expected notes, final nextNote read failed expectedly: %v", err)
+		if !strings.Contains(err.Error(), "timed out") {
+			t.Errorf("Expected timeout error, got: %v", err)
+		}
 		return
 	}
 	// If we end up registering near the heartbeat boundaries, we might

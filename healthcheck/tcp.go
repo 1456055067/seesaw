@@ -36,10 +36,11 @@ const (
 // TCPChecker contains configuration specific to a TCP healthcheck.
 type TCPChecker struct {
 	Target
-	Receive   string
-	Send      string
-	Secure    bool
-	TLSVerify bool
+	Receive    string
+	Send       string
+	Secure     bool
+	TLSVerify  bool
+	ServerName string // TLS ServerName override. If empty, derived from target address.
 }
 
 // NewTCPChecker returns an initialised TCPChecker.
@@ -88,16 +89,18 @@ func (hc *TCPChecker) Check(timeout time.Duration) *Result {
 
 	// Negotiate TLS if this is required.
 	if hc.Secure {
-		// TODO(jsing): We probably should allow the server name to
-		// be specified via configuration...
-		host, _, err := net.SplitHostPort(hc.addr())
-		if err != nil {
-			msg = msg + "; failed to split host"
-			return complete(start, msg, false, err)
+		serverName := hc.ServerName
+		if serverName == "" {
+			var splitErr error
+			serverName, _, splitErr = net.SplitHostPort(hc.addr())
+			if splitErr != nil {
+				msg = msg + "; failed to split host"
+				return complete(start, msg, false, splitErr)
+			}
 		}
 		tlsConfig := &tls.Config{
 			InsecureSkipVerify: !hc.TLSVerify,
-			ServerName:         host,
+			ServerName:         serverName,
 		}
 		tlsConn := tls.Client(conn, tlsConfig)
 		if err := tlsConn.Handshake(); err != nil {

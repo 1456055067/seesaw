@@ -388,7 +388,8 @@ var vserverTests = []struct {
 					"HTTP/16767_0": {
 						Name:      "HTTP/16767_0",
 						Mode:      seesaw.HCModeDSR,
-						Type:      seesaw.HCTypeHTTPS,
+						Type:      seesaw.HCTypeHTTP,
+						Secure:    true,
 						Port:      16767,
 						Interval:  time.Duration(10 * time.Second), // protobuf default
 						Timeout:   time.Duration(5 * time.Second),  // protobuf default
@@ -482,7 +483,8 @@ var vserverTests = []struct {
 							"TCP/6697_0": {
 								Name:      "TCP/6697_0",
 								Mode:      seesaw.HCModePlain,
-								Type:      seesaw.HCTypeTCPTLS,
+								Type:      seesaw.HCTypeTCP,
+								Secure:    true,
 								Port:      6697,
 								Interval:  time.Duration(5 * time.Second),
 								Timeout:   time.Duration(5 * time.Second), // protobuf default

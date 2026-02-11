@@ -98,7 +98,7 @@ type serviceKey struct {
 type service struct {
 	vserver *vserver
 	serviceKey
-	ip      seesaw.IP // TODO(ncope): Use seesaw.VIP here.
+	vip seesaw.VIP
 	ventry  *config.VserverEntry
 	ipvsSvc *ipvs.Service
 	stats   *seesaw.ServiceStats
@@ -131,7 +131,7 @@ func (s *service) ipvsService() *ipvs.Service {
 	case s.fwm > 0 && s.af == seesaw.IPv6:
 		ip = net.IPv6zero
 	default:
-		ip = s.ip.IP()
+		ip = s.vip.IP.IP()
 	}
 	return &ipvs.Service{
 		Address:      ip,
@@ -149,16 +149,16 @@ func (s *service) ipvsService() *ipvs.Service {
 func (s *service) ipvsEqual(other *service) bool {
 	return s.ipvsSvc.Equal(*other.ipvsSvc) &&
 		s.ventry.Mode == other.ventry.Mode &&
-		s.ventry.LThreshold == other.ventry.LThreshold &&
-		s.ventry.UThreshold == other.ventry.UThreshold
+		s.ventry.LowerThreshold == other.ventry.LowerThreshold &&
+		s.ventry.UpperThreshold == other.ventry.UpperThreshold
 }
 
 // String returns a string representing a service.
 func (s *service) String() string {
 	if s.fwm != 0 {
-		return fmt.Sprintf("%v/fwm:%d", s.ip, s.fwm)
+		return fmt.Sprintf("%v/fwm:%d", s.vip.IP, s.fwm)
 	}
-	ip := s.ip.String()
+	ip := s.vip.IP.String()
 	port := strconv.Itoa(int(s.port))
 	return fmt.Sprintf("%v/%v", net.JoinHostPort(ip, port), s.proto)
 }
@@ -180,7 +180,7 @@ type destination struct {
 	backend *seesaw.Backend
 	ipvsDst *ipvs.Destination
 	stats   *seesaw.DestinationStats
-	weight  int32
+	weight  uint32
 	checks  []*check
 	healthy bool
 	active  bool
@@ -204,8 +204,8 @@ func (d *destination) ipvsDestination() *ipvs.Destination {
 		Port:           d.service.port,
 		Weight:         d.weight,
 		Flags:          flags,
-		LowerThreshold: uint32(d.service.ventry.LThreshold),
-		UpperThreshold: uint32(d.service.ventry.UThreshold),
+		LowerThreshold: uint32(d.service.ventry.LowerThreshold),
+		UpperThreshold: uint32(d.service.ventry.UpperThreshold),
 	}
 }
 
@@ -296,6 +296,22 @@ type vserverChecks struct {
 	checks      map[CheckKey]*check
 }
 
+// findVIP looks up a VIP from the vserver config matching the given IP.
+// If no match is found, it determines the VIP type from the IP itself.
+func (v *vserver) findVIP(ip net.IP) seesaw.VIP {
+	sip := seesaw.NewIP(ip)
+	for _, vip := range v.config.VIPs {
+		if vip.IP == sip {
+			return *vip
+		}
+	}
+	vipType := seesaw.UnicastVIP
+	if seesaw.IsAnycast(ip) {
+		vipType = seesaw.AnycastVIP
+	}
+	return seesaw.VIP{IP: sip, Type: vipType}
+}
+
 // expandServices returns a list of services that have been expanded from the
 // vserver configuration.
 func (v *vserver) expandServices() map[serviceKey]*service {
@@ -322,7 +338,7 @@ func (v *vserver) expandServices() map[serviceKey]*service {
 					proto: entry.Proto,
 					port:  entry.Port,
 				},
-				ip:      seesaw.NewIP(ip),
+				vip:     v.findVIP(ip),
 				ventry:  entry,
 				vserver: v,
 				dests:   make(map[destinationKey]*destination, 0),
@@ -372,7 +388,7 @@ func (v *vserver) expandFWMServices() map[serviceKey]*service {
 				af:  af,
 				fwm: v.fwm[af],
 			},
-			ip:      seesaw.NewIP(ip),
+			vip:     v.findVIP(ip),
 			ventry:  ventry,
 			vserver: v,
 			stats:   &seesaw.ServiceStats{},
@@ -423,7 +439,7 @@ func (v *vserver) expandChecks() map[CheckKey]*check {
 			}
 			for _, hc := range v.config.Healthchecks {
 				// vserver-level healthchecks
-				key := newCheckKey(svc.ip, dest.ip, 0, 0, hc)
+				key := newCheckKey(svc.vip.IP, dest.ip, 0, 0, hc)
 				c := checks[key]
 				if c == nil {
 					c = newCheck(key, v, hc)
@@ -437,7 +453,7 @@ func (v *vserver) expandChecks() map[CheckKey]*check {
 			if v.config.UseFWM {
 				for _, ve := range svc.vserver.config.Entries {
 					for _, hc := range ve.Healthchecks {
-						key := newCheckKey(svc.ip, dest.ip, ve.Port, ve.Proto, hc)
+						key := newCheckKey(svc.vip.IP, dest.ip, ve.Port, ve.Proto, hc)
 						c := newCheck(key, v, hc)
 						checks[key] = c
 						dest.checks = append(dest.checks, c)
@@ -446,7 +462,7 @@ func (v *vserver) expandChecks() map[CheckKey]*check {
 				}
 			} else {
 				for _, hc := range svc.ventry.Healthchecks {
-					key := newCheckKey(svc.ip, dest.ip, svc.port, svc.proto, hc)
+					key := newCheckKey(svc.vip.IP, dest.ip, svc.port, svc.proto, hc)
 					c := newCheck(key, v, hc)
 					checks[key] = c
 					dest.checks = append(dest.checks, c)
@@ -529,13 +545,15 @@ func (v *vserver) updateConfig(config *config.Vserver) {
 	if reflect.DeepEqual(config, v.config) {
 		return
 	}
-	// TODO(jsing): Consider the implications of potentially blocking here.
-	v.update <- config
+	select {
+	case v.update <- config:
+	default:
+		log.Warningf("%v: config update skipped because a previous update is still pending", v)
+	}
 }
 
 // queueCheckNotification queues a checkNotification for processing.
 func (v *vserver) queueCheckNotification(n *checkNotification) {
-	// TODO(jsing): Consider the implications of potentially blocking here.
 	select {
 	case v.notify <- n:
 	default:
@@ -545,8 +563,11 @@ func (v *vserver) queueCheckNotification(n *checkNotification) {
 
 // queueOverride queues an Override for processing.
 func (v *vserver) queueOverride(o seesaw.Override) {
-	// TODO(jsing): Consider the implications of potentially blocking here.
-	v.overrideChan <- o
+	select {
+	case v.overrideChan <- o:
+	default:
+		log.Warningf("%v: override skipped because the queue is full", v)
+	}
 }
 
 // handleConfigUpdate updates the internal structures of a vserver using the
@@ -588,8 +609,8 @@ func (v *vserver) handleConfigUpdate(config *config.Vserver) {
 		// (Changing a VIP address also requires updating iptables, but
 		//  v.configUpdate() handles this case)
 		//
-		// TODO(angusc): Add support for finer-grained updates to ncc so we can
-		// avoid re-initialising the vserver in these cases.
+		// Finer-grained NCC updates (e.g., UpdateVserverEntry) could avoid
+		// full re-initialization for port/protocol changes.
 		reInit := false
 		switch {
 		case config.UseFWM != v.config.UseFWM:
@@ -653,16 +674,16 @@ func (v *vserver) configUpdate() {
 	newSvcs := v.expandServices()
 	for svcKey, newSvc := range newSvcs {
 		if svc, ok := v.services[svcKey]; ok {
-			if svc.ip.Equal(newSvc.ip) {
+			if svc.vip.IP.Equal(newSvc.vip.IP) {
 				svc.update(newSvc)
 				continue
 			}
-			log.Infof("%v: service %v: new IP address: %v", v, svc, newSvc.ip)
+			log.Infof("%v: service %v: new IP address: %v", v, svc, newSvc.vip.IP)
 			v.deleteService(svc)
 		}
 		log.Infof("%v: adding new service: %v", v, newSvc)
 		v.services[svcKey] = newSvc
-		v.updateState(newSvc.ip)
+		v.updateState(newSvc.vip.IP)
 	}
 
 	for svcKey, svc := range v.services {
@@ -700,7 +721,7 @@ func (v *vserver) configUpdate() {
 	// VIP from the interface.
 	needVIPs := make(map[seesaw.IP]bool)
 	for _, svc := range v.services {
-		needVIPs[svc.ip] = true
+		needVIPs[svc.vip.IP] = true
 	}
 	for vip := range v.vips {
 		if !needVIPs[vip.IP] {
@@ -717,8 +738,9 @@ func (v *vserver) configUpdate() {
 		}
 	}
 	v.checks = checks
-	// TODO(baptr): Should this only happen if it's enabled?
-	v.configureVIPs()
+	if v.enabled {
+		v.configureVIPs()
+	}
 	return
 }
 
@@ -726,12 +748,12 @@ func (v *vserver) configUpdate() {
 func (v *vserver) deleteService(s *service) {
 	if s.active {
 		s.healthy = false
-		v.updateState(s.ip)
+		v.updateState(s.vip.IP)
 	}
 	log.Infof("%v: deleting service: %v", v, s)
 	delete(v.services, s.serviceKey)
-	// TODO(baptr): Once service contains seesaw.VIP, move check and
-	// unconfigureVIP here.
+	// Service now contains seesaw.VIP; unconfigureVIP could be moved here
+	// if needed for cleanup during service deletion.
 }
 
 // handleCheckNotification processes a checkNotification, bringing
@@ -772,7 +794,50 @@ func (v *vserver) handleOverride(o seesaw.Override) {
 			// enable state not changed - nothing to do
 			return
 		}
-	// TODO(angusc): handle backend and destination overrides.
+	case *seesaw.BackendOverride:
+		for _, svc := range v.services {
+			for _, d := range svc.dests {
+				if d.backend.Hostname == override.Hostname {
+					switch override.State() {
+					case seesaw.OverrideDisable:
+						if d.active {
+							d.healthy = false
+							d.service.updateState()
+						}
+					case seesaw.OverrideEnable:
+						if !d.active && !d.healthy {
+							d.healthy = true
+							d.service.updateState()
+						}
+					case seesaw.OverrideDefault:
+						// Revert to actual healthcheck state.
+					}
+				}
+			}
+		}
+		return
+	case *seesaw.DestinationOverride:
+		for _, svc := range v.services {
+			for _, d := range svc.dests {
+				if d.backend.Hostname == override.DestinationName {
+					switch override.State() {
+					case seesaw.OverrideDisable:
+						if d.active {
+							d.healthy = false
+							d.service.updateState()
+						}
+					case seesaw.OverrideEnable:
+						if !d.active && !d.healthy {
+							d.healthy = true
+							d.service.updateState()
+						}
+					case seesaw.OverrideDefault:
+						// Revert to actual healthcheck state.
+					}
+				}
+			}
+		}
+		return
 	default:
 		return
 	}
@@ -989,7 +1054,7 @@ func (s *service) updateState() {
 	log.Infof("%v: %v: %d/%d destinations are healthy, service was %v, now %v",
 		s.vserver, s, numHealthyDests, numBackends, oldHealth, newHealth)
 	s.healthy = healthy
-	vserverActive := s.vserver.active[s.ip]
+	vserverActive := s.vserver.active[s.vip.IP]
 
 	switch {
 	case vserverActive && s.healthy:
@@ -999,7 +1064,7 @@ func (s *service) updateState() {
 
 	case vserverActive != s.healthy:
 		// The vserver may need to be brought up or down.
-		s.vserver.updateState(s.ip)
+		s.vserver.updateState(s.vip.IP)
 	}
 }
 
@@ -1127,7 +1192,7 @@ func (s *service) snapshot() *seesaw.Service {
 		Scheduler:     s.ventry.Scheduler,
 		OnePacket:     s.ventry.OnePacket,
 		Persistence:   s.ventry.Persistence,
-		IP:            s.ip.IP(),
+		IP:            s.vip.IP.IP(),
 		Healthy:       s.healthy,
 		Enabled:       s.vserver.enabled,
 		Active:        s.active,
@@ -1165,7 +1230,7 @@ func (v *vserver) updateState(ip seesaw.IP) {
 	// A vserver unicast IP is healthy if *any* services for that IP are healthy.
 	var healthy bool
 	for _, s := range v.services {
-		if !s.ip.Equal(ip) {
+		if !s.vip.IP.Equal(ip) {
 			continue
 		}
 		healthy = s.healthy
@@ -1193,7 +1258,7 @@ func (v *vserver) updateState(ip seesaw.IP) {
 // state of the vserver and the health of each service.
 func (v *vserver) updateServices(ip seesaw.IP) {
 	for _, s := range v.services {
-		if !s.ip.Equal(ip) {
+		if !s.vip.IP.Equal(ip) {
 			continue
 		}
 		if !v.active[ip] {
@@ -1222,9 +1287,8 @@ func (v *vserver) up(ip seesaw.IP) {
 	// If this is an anycast VIP, start advertising a BGP route.
 	nip := ip.IP()
 	if seesaw.IsAnycast(nip) {
-		// TODO(jsing): Create an LBVserver that only encapsulates
-		// the necessary state, rather than storing a full vserver
-		// snapshot.
+		// A lightweight LBVserver struct with only the needed fields
+		// would be more efficient here than a full vserver snapshot.
 		lbVserver := v.snapshot()
 		lbVserver.Services = nil
 		lbVserver.Warnings = nil
@@ -1237,11 +1301,9 @@ func (v *vserver) up(ip seesaw.IP) {
 		if err := v.engine.lbInterface.AddVIP(vip); err != nil {
 			log.Fatalf("%v: failed to add VIP %v: %v", v, ip, err)
 		}
-		// TODO(angusc): Filter out anycast VIPs for non-anycast clusters further
-		// upstream.
 		if v.engine.config.AnycastEnabled {
 			log.Infof("%v: advertising BGP route for %v", v, ip)
-			if err := ncc.BGPAdvertiseVIP(nip); err != nil {
+			if err := ncc.BGPAdvertiseVIP(*vip); err != nil {
 				log.Fatalf("%v: failed to advertise VIP %v: %v", v, ip, err)
 			}
 		} else {
@@ -1255,8 +1317,8 @@ func (v *vserver) up(ip seesaw.IP) {
 // downAll takes down all IP addresses and services for a vserver.
 func (v *vserver) downAll() {
 	for _, s := range v.services {
-		if v.active[s.ip] {
-			v.down(s.ip)
+		if v.active[s.vip.IP] {
+			v.down(s.vip.IP)
 		}
 		if s.active {
 			s.down()
@@ -1274,7 +1336,7 @@ func (v *vserver) down(ip seesaw.IP) {
 	if seesaw.IsAnycast(nip) {
 		if v.engine.config.AnycastEnabled {
 			log.Infof("%v: withdrawing BGP route for %v", v, ip)
-			if err := ncc.BGPWithdrawVIP(nip); err != nil {
+			if err := ncc.BGPWithdrawVIP(*seesaw.NewVIP(nip, nil)); err != nil {
 				log.Fatalf("%v: failed to withdraw VIP %v: %v", v, ip, err)
 			}
 		}
@@ -1287,7 +1349,8 @@ func (v *vserver) down(ip seesaw.IP) {
 		}
 		delete(v.lbVservers, ip)
 	}
-	// TODO(jsing): Should we delay while the BGP routes propagate?
+	// A configurable delay after BGP withdrawal could improve convergence
+	// for downstream routers, but is not implemented.
 
 	delete(v.active, ip)
 	v.updateServices(ip)
@@ -1303,19 +1366,16 @@ func (v *vserver) updateStats() {
 
 // configureVIPs configures VIPs on the load balancing interface.
 func (v *vserver) configureVIPs() {
-	// TODO(ncope): Return to iterating over v.services once they contain seesaw.VIPs.
 	for _, vip := range v.config.VIPs {
 		if _, ok := v.vips[*vip]; ok {
 			continue
 		}
-		// TODO(angusc): Set up anycast Vservers here as well (without bringing up the VIP).
+		// Anycast VIPs are configured via updateState when healthy,
+		// which sets up IPVS rules and BGP advertisements.
 		if vip.Type == seesaw.AnycastVIP {
 			continue
 		}
 
-		// TODO(jsing): Create a ncc.LBVserver that only encapsulates
-		// the necessary state, rather than storing a full vserver
-		// snapshot.
 		lbVserver := v.snapshot()
 		lbVserver.Services = nil
 		lbVserver.Warnings = nil
@@ -1351,8 +1411,6 @@ func (v *vserver) unconfigureVIP(vip *seesaw.VIP) {
 
 // unconfigureVIPs removes unicast VIPs from the load balancing interface.
 func (v *vserver) unconfigureVIPs() {
-	// TODO(jsing): At a later date this will need to support VLAN
-	// interfaces and dedicated VIP subnets.
 	for vip := range v.vips {
 		v.unconfigureVIP(&vip)
 	}

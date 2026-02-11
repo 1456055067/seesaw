@@ -25,12 +25,21 @@ import (
 	"net"
 	"strings"
 
+	"github.com/google/seesaw/common/seesaw"
 	ncctypes "github.com/google/seesaw/ncc/types"
 	"github.com/google/seesaw/quagga"
 )
 
-// TODO(jsing): Make this configurable.
-const seesawASN = uint32(64512)
+// DefaultBGPASN is the default BGP Autonomous System Number for Seesaw.
+const DefaultBGPASN = uint32(64512)
+
+// seesawASN is the configured BGP ASN. Set via SetBGPASN before use.
+var seesawASN = DefaultBGPASN
+
+// SetBGPASN sets the BGP Autonomous System Number used by the NCC.
+func SetBGPASN(asn uint32) {
+	seesawASN = asn
+}
 
 // quaggaBGP establishes a connection with the Quagga BGP daemon.
 func quaggaBGP(asn uint32) (*quagga.BGP, error) {
@@ -134,21 +143,23 @@ func (ncc *SeesawNCC) BGPWithdrawAll(unused int, reply *int) error {
 }
 
 // BGPAdvertiseVIP requests the Quagga BGP daemon to advertise the given VIP.
-func (ncc *SeesawNCC) BGPAdvertiseVIP(vip net.IP, unused *int) error {
+func (ncc *SeesawNCC) BGPAdvertiseVIP(vip seesaw.VIP, unused *int) error {
+	ip := vip.IP.IP()
 	bgp, err := quaggaBGP(seesawASN)
 	if err != nil {
 		return err
 	}
 	defer bgp.Close()
-	return bgp.Advertise(&net.IPNet{IP: vip, Mask: hostMask(vip)})
+	return bgp.Advertise(&net.IPNet{IP: ip, Mask: hostMask(ip)})
 }
 
 // BGPWithdrawVIP requests the Quagga BGP daemon to withdraw the given VIP.
-func (ncc *SeesawNCC) BGPWithdrawVIP(vip net.IP, unused *int) error {
+func (ncc *SeesawNCC) BGPWithdrawVIP(vip seesaw.VIP, unused *int) error {
+	ip := vip.IP.IP()
 	bgp, err := quaggaBGP(seesawASN)
 	if err != nil {
 		return err
 	}
 	defer bgp.Close()
-	return bgp.Withdraw(&net.IPNet{IP: vip, Mask: hostMask(vip)})
+	return bgp.Withdraw(&net.IPNet{IP: ip, Mask: hostMask(ip)})
 }

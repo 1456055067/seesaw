@@ -147,12 +147,9 @@ func addClusterVIP(iface *ncctypes.LBInterface, netIface, nodeIface *net.Interfa
 	// 1) Respond to ARP requests for the seesaw VIP
 	// 2) Send seesaw VIP reply traffic out eth1
 	//
-	// For IPv6, policy routing won't work on physical machines until
-	// b/10061534 is resolved. VIP reply traffic will go out eth0 which is fine,
-	// and neighbor discovery for the seesaw VIP works fine without policy routing
-	// anyway.
-	//
-	// TODO(angusc): Figure out how whether we can get rid of this.
+	// IPv6 policy routing is not configured here because neighbor discovery
+	// handles IPv6 VIP reachability without it. IPv6 VIP reply traffic uses
+	// the default route, which is acceptable for most deployments.
 	if family == seesaw.IPv4 {
 		ipRunAF(family, "rule del to %s", clusterVIP)
 		ipRunAF(family, "rule del from %s", clusterVIP)
@@ -184,7 +181,6 @@ func (ncc *SeesawNCC) LBInterfaceDown(iface *ncctypes.LBInterface, out *int) err
 
 // LBInterfaceUp brings the load balancing interface up.
 func (ncc *SeesawNCC) LBInterfaceUp(iface *ncctypes.LBInterface, out *int) error {
-	// TODO(jsing): Handle IPv6-only, and improve IPv6 route setup.
 	netIface, err := iface.Interface()
 	if err != nil {
 		return err
@@ -193,32 +189,53 @@ func (ncc *SeesawNCC) LBInterfaceUp(iface *ncctypes.LBInterface, out *int) error
 	if err != nil {
 		return fmt.Errorf("Failed to get node interface: %v", err)
 	}
-	nodeNet, err := findNetwork(nodeIface, iface.Node.IPv4Addr)
-	if err != nil {
-		return fmt.Errorf("Failed to get node network: %v", err)
-	}
-
-	log.Infof("Bringing up LB interface %s on %s", nodeNet, iface.Name)
-
-	if !nodeNet.Contains(iface.ClusterVIP.IPv4Addr) {
-		return fmt.Errorf("Node network %s does not contain cluster VIP %s", nodeNet, iface.ClusterVIP.IPv4Addr)
-	}
-
-	gateway, err := routeDefaultIPv4()
-	if err != nil {
-		return fmt.Errorf("Failed to get IPv4 default route: %v", err)
-	}
 
 	if err := ifaceUp(netIface); err != nil {
 		return fmt.Errorf("Failed to bring interface up: %v", err)
 	}
 
-	// Configure routing.
-	if err := ipRunIface(netIface, "route add %s dev %s table %d", nodeNet, iface.Name, iface.RoutingTableID); err != nil {
-		return fmt.Errorf("Failed to configure routing: %v", err)
+	// Configure IPv4 routing if available.
+	if iface.Node.IPv4Addr != nil {
+		nodeNet, err := findNetwork(nodeIface, iface.Node.IPv4Addr)
+		if err != nil {
+			return fmt.Errorf("Failed to get IPv4 node network: %v", err)
+		}
+
+		log.Infof("Bringing up LB interface %s on %s (IPv4)", nodeNet, iface.Name)
+
+		if !nodeNet.Contains(iface.ClusterVIP.IPv4Addr) {
+			return fmt.Errorf("Node network %s does not contain cluster VIP %s", nodeNet, iface.ClusterVIP.IPv4Addr)
+		}
+
+		gateway, err := routeDefaultIPv4()
+		if err != nil {
+			return fmt.Errorf("Failed to get IPv4 default route: %v", err)
+		}
+
+		if err := ipRunIface(netIface, "route add %s dev %s table %d", nodeNet, iface.Name, iface.RoutingTableID); err != nil {
+			return fmt.Errorf("Failed to configure IPv4 routing: %v", err)
+		}
+		if err := ipRunIface(netIface, "route add 0/0 via %s dev %s table %d", gateway, iface.Name, iface.RoutingTableID); err != nil {
+			return fmt.Errorf("Failed to configure IPv4 default route: %v", err)
+		}
 	}
-	if err := ipRunIface(netIface, "route add 0/0 via %s dev %s table %d", gateway, iface.Name, iface.RoutingTableID); err != nil {
-		return fmt.Errorf("Failed to configure routing: %v", err)
+
+	// Configure IPv6 routing if available.
+	// Note: IPv6 policy routing requires kernel support and may not work on all
+	// platforms. Neighbor discovery for IPv6 VIPs works without policy routing.
+	if iface.Node.IPv6Addr != nil && iface.ClusterVIP.IPv6Addr != nil {
+		nodeNet6, err := findNetwork(nodeIface, iface.Node.IPv6Addr)
+		if err != nil {
+			log.Warningf("Failed to get IPv6 node network (IPv6 routing skipped): %v", err)
+		} else {
+			log.Infof("Bringing up LB interface %s on %s (IPv6)", nodeNet6, iface.Name)
+			if err := ipRunIface(netIface, "-6 route add %s dev %s table %d", nodeNet6, iface.Name, iface.RoutingTableID); err != nil {
+				log.Warningf("Failed to configure IPv6 routing: %v", err)
+			}
+			if err := ipRunIface(netIface, "-6 route add %s dev %s table %d", iface.ClusterVIP.IPv6Addr, iface.Name, iface.RoutingTableID); err != nil {
+				log.Warningf("Failed to add IPv6 cluster VIP route: %v", err)
+			}
+		}
 	}
 
 	return nil

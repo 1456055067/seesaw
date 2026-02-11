@@ -747,8 +747,10 @@ func (x *Vlan) GetHost() *Host {
 	return nil
 }
 
-// TODO(angusc): Use different message types for the different healthcheck
-// types.
+// HTTPS and TCP_TLS types are retained for backward compatibility but map to
+// HTTP and TCP with TLS enabled on the Go side. RADIUS-specific fields
+// (radius_username, radius_password, radius_secret, radius_response) are
+// defined in config.proto but require protoc regeneration to be usable here.
 type Healthcheck struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

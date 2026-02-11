@@ -62,6 +62,8 @@ type fetcher struct {
 	cluster string
 	servers []string
 	timeout time.Duration
+	verify  func(body []byte) error
+	ipCache map[string][]net.IP
 }
 
 func newFetcher(cfg *EngineConfig) (*fetcher, error) {
@@ -79,6 +81,10 @@ func newFetcher(cfg *EngineConfig) (*fetcher, error) {
 		port:    cfg.ConfigServerPort,
 		servers: cfg.ConfigServers,
 		timeout: cfg.ConfigServerTimeout,
+		verify: func(body []byte) error {
+			return proto.Unmarshal(body, &pb.Cluster{})
+		},
+		ipCache: make(map[string][]net.IP),
 	}
 	return f, nil
 }
@@ -141,22 +147,27 @@ func fetchConfig(f *fetcher, host string, ip net.IP) (string, []byte, error) {
 	if err != nil {
 		return url, nil, fmt.Errorf("fetch failed from %v (%v): %v", url, ip, err)
 	}
-	// TODO(jsing): Consider moving the verification to a callback function.
-	p := &pb.Cluster{}
-	if err := proto.Unmarshal(body, p); err != nil {
-		return url, nil, fmt.Errorf("invalid configuration from %v (%v): %v", url, ip, err)
+	if f.verify != nil {
+		if err := f.verify(body); err != nil {
+			return url, nil, fmt.Errorf("invalid configuration from %v (%v): %v", url, ip, err)
+		}
 	}
 	return url, body, nil
 }
 
 func (f *fetcher) fetch(handler fetchHandler) (string, []byte, error) {
 	for _, server := range f.servers {
-		// TODO(angusc): Resolve and cache the IP address for each server so we have
-		// a fallback in case DNS is down.
 		addrs, err := net.LookupIP(server)
 		if err != nil {
 			log.Errorf("DNS lookup failed for config server %q: %v", server, err)
-			continue
+			if cached, ok := f.ipCache[server]; ok {
+				log.Infof("Using cached IP addresses for %s", server)
+				addrs = cached
+			} else {
+				continue
+			}
+		} else {
+			f.ipCache[server] = addrs
 		}
 
 		// Randomise the list of addresses, putting all IPv6 addresses before IPv4.

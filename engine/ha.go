@@ -153,9 +153,16 @@ func (h *haManager) timer() <-chan time.Time {
 	if s := h.state(); s == spb.HaState_DISABLED || s == spb.HaState_UNKNOWN {
 		return make(chan time.Time)
 	}
-	// TODO(angusc): Make this clock-jump safe.
+	// Use time.Since which leverages monotonic clock readings, making this
+	// safe against wall clock jumps.
 	h.statusLock.RLock()
-	deadline := h.status.LastUpdate.Add(h.timeout)
+	elapsed := time.Since(h.status.LastUpdate)
 	h.statusLock.RUnlock()
-	return time.After(deadline.Sub(time.Now()))
+	remaining := h.timeout - elapsed
+	if remaining <= 0 {
+		ch := make(chan time.Time, 1)
+		ch <- time.Now()
+		return ch
+	}
+	return time.After(remaining)
 }

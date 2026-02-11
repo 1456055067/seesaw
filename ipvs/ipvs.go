@@ -107,7 +107,7 @@ func newIPVSDestination(dst *Destination) *ipvsDestination {
 		Address:        dst.Address,
 		Port:           dst.Port,
 		Flags:          dst.Flags,
-		Weight:         uint32(dst.Weight),
+		Weight:         dst.Weight,
 		UpperThreshold: dst.UpperThreshold,
 		LowerThreshold: dst.LowerThreshold,
 	}
@@ -152,7 +152,7 @@ func (ipvsDst ipvsDestination) toDestination() *Destination {
 	dst := &Destination{
 		Address:        ipvsDst.Address,
 		Port:           ipvsDst.Port,
-		Weight:         int32(ipvsDst.Weight), // TODO(jsing): uint32?
+		Weight:         ipvsDst.Weight,
 		Flags:          ipvsDst.Flags,
 		LowerThreshold: ipvsDst.LowerThreshold,
 		UpperThreshold: ipvsDst.UpperThreshold,
@@ -281,7 +281,7 @@ const (
 type Destination struct {
 	Address        net.IP
 	Port           uint16
-	Weight         int32
+	Weight         uint32
 	Flags          DestinationFlags
 	LowerThreshold uint32
 	UpperThreshold uint32

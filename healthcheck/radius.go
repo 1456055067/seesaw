@@ -284,10 +284,11 @@ func responseAuthenticator(rp *radiusPacket, requestAuthenticator *radiusAuthent
 // RADIUSChecker contains configuration specific to a RADIUS healthcheck.
 type RADIUSChecker struct {
 	Target
-	Username string
-	Password string
-	Secret   string
-	Response string
+	Username         string
+	Password         string
+	Secret           string
+	Response         string
+	SkipResponseAuth bool // Skip response authenticator validation (allows checks without a valid secret).
 }
 
 // NewRADIUSChecker returns an initialised RADIUSChecker.
@@ -409,17 +410,15 @@ func (hc *RADIUSChecker) Check(timeout time.Duration) *Result {
 		return complete(start, msg, false, err)
 	}
 
-	// TODO(jsing): Consider adding a flag to disable the response
-	// authenticator check. This would allow healthchecks to be performed
-	// without needing a valid secret (although the host still needs to be
-	// configured as a RADIUS client).
-	respAuth, err := responseAuthenticator(rp, authenticator, hc.Secret)
-	if err != nil {
-		return complete(start, msg, false, err)
-	}
-	if !bytes.Equal(rp.Authenticator[:], respAuth[:]) {
-		msg = fmt.Sprintf("%s; response authenticator mismatch (incorrect secret?)", msg)
-		return complete(start, msg, false, err)
+	if !hc.SkipResponseAuth {
+		respAuth, err := responseAuthenticator(rp, authenticator, hc.Secret)
+		if err != nil {
+			return complete(start, msg, false, err)
+		}
+		if !bytes.Equal(rp.Authenticator[:], respAuth[:]) {
+			msg = fmt.Sprintf("%s; response authenticator mismatch (incorrect secret?)", msg)
+			return complete(start, msg, false, err)
+		}
 	}
 
 	msg = fmt.Sprintf("%s; got RADIUS %s response", msg, rp.Code)

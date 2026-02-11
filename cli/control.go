@@ -29,7 +29,6 @@ func configReload(cli *SeesawCLI, args []string) error {
 }
 
 func configSource(cli *SeesawCLI, args []string) error {
-	// TODO(jsing): Move this up to the command handling level.
 	if len(args) > 1 {
 		return fmt.Errorf("Unexpected arguments")
 	}

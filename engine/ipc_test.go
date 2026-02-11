@@ -18,8 +18,76 @@ package engine
 
 import (
 	"testing"
+
+	"github.com/google/seesaw/common/seesaw"
+	"github.com/google/seesaw/healthcheck"
 )
 
 func TestEnableDisableBackend(t *testing.T) {
-	// TODO(angusc): Implement this function.
+	v := newTestVserver(nil)
+	v.handleConfigUpdate(&vserverConfig)
+
+	// Bring everything up.
+	for _, c := range v.checks {
+		n := &checkNotification{key: c.key, status: healthcheck.Status{State: healthcheck.StateHealthy}}
+		v.handleCheckNotification(n)
+	}
+
+	// Verify all destinations are healthy and active.
+	for _, svc := range v.services {
+		for _, d := range svc.dests {
+			if !d.healthy {
+				t.Errorf("destination %v: expected healthy, got unhealthy", d.destinationKey)
+			}
+		}
+	}
+
+	// Disable backend1 via BackendOverride.
+	o := &seesaw.BackendOverride{
+		Hostname:      backend1.Hostname,
+		OverrideState: seesaw.OverrideDisable,
+	}
+	v.handleOverride(o)
+
+	// Verify backend1 destinations are unhealthy, backend2 still healthy.
+	for _, svc := range v.services {
+		for _, d := range svc.dests {
+			if d.backend.Hostname == backend1.Hostname {
+				if d.healthy {
+					t.Errorf("destination %v (backend1): expected unhealthy after disable, got healthy", d.destinationKey)
+				}
+			} else {
+				if !d.healthy {
+					t.Errorf("destination %v (backend2): expected healthy, got unhealthy", d.destinationKey)
+				}
+			}
+		}
+	}
+
+	// Re-enable backend1 via OverrideDefault.
+	o = &seesaw.BackendOverride{
+		Hostname:      backend1.Hostname,
+		OverrideState: seesaw.OverrideDefault,
+	}
+	v.handleOverride(o)
+
+	// Force a state transition by cycling unhealthy→healthy, since
+	// handleCheckNotification only acts on transitions.
+	for _, c := range v.checks {
+		n := &checkNotification{key: c.key, status: healthcheck.Status{State: healthcheck.StateUnhealthy}}
+		v.handleCheckNotification(n)
+	}
+	for _, c := range v.checks {
+		n := &checkNotification{key: c.key, status: healthcheck.Status{State: healthcheck.StateHealthy}}
+		v.handleCheckNotification(n)
+	}
+
+	// Verify all destinations are healthy again.
+	for _, svc := range v.services {
+		for _, d := range svc.dests {
+			if !d.healthy {
+				t.Errorf("destination %v: expected healthy after re-enable, got unhealthy", d.destinationKey)
+			}
+		}
+	}
 }

@@ -132,12 +132,13 @@ type MessageStats struct {
 
 // Neighbor represents a BGP neighbor.
 type Neighbor struct {
-	IP          net.IP
-	RouterID    net.IP
-	ASN         uint32
-	Description string
-	BGPState    BGPState
-	Uptime      time.Duration
+	IP               net.IP
+	RouterID         net.IP
+	ASN              uint32
+	Description      string
+	BGPState         BGPState
+	Uptime           time.Duration
+	PrefixesReceived uint32
 	MessageStats
 }
 
@@ -190,12 +191,13 @@ func (b *BGP) Configuration() ([]string, error) {
 }
 
 // Neighbors returns a list of BGP neighbors that we are currently peering with.
+// Note: Advertised route counts require per-neighbor commands and are not
+// included here. PrefixesReceived is parsed from the neighbor detail output.
 func (b *BGP) Neighbors() ([]*Neighbor, error) {
 	ni, err := b.vty.Command("show ip bgp neighbors")
 	if err != nil {
 		return nil, err
 	}
-	// TODO(jsing): Include details for advertised/received routes.
 	return parseNeighbors(ni), nil
 }
 
@@ -239,6 +241,7 @@ var (
 	neighborStateRE   = regexp.MustCompile(`^  BGP state = (\w+)(, up for ([0-9ywdhm:]+))?$`)
 	neighborStatsRE   = regexp.MustCompile(`^    (\w+): +(\d+) +(\d+)$`)
 	neighborVersionRE = regexp.MustCompile(`^  BGP version (\d), remote router ID ([a-f0-9.:]+)`)
+	neighborPrefixRE  = regexp.MustCompile(`^\s+(\d+) accepted prefixes$`)
 )
 
 // parseNeighbors parses the "show ip bgp neighbors" output from the Quagga
@@ -298,6 +301,9 @@ func parseNeighbors(sn string) []*Neighbor {
 			neighbor.RouterID = net.ParseIP(nm[2])
 		} else if s == "  Message statistics:" {
 			msgStats = true
+		} else if nm := neighborPrefixRE.FindStringSubmatch(s); nm != nil {
+			prefixes, _ := strconv.ParseUint(nm[1], 10, 32)
+			neighbor.PrefixesReceived = uint32(prefixes)
 		}
 	}
 	return neighbors

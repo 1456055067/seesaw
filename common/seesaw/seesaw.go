@@ -139,11 +139,9 @@ const (
 	HCTypeNone HealthcheckType = iota
 	HCTypeDNS
 	HCTypeHTTP
-	HCTypeHTTPS
 	HCTypeICMP
 	HCTypeRADIUS
 	HCTypeTCP
-	HCTypeTCPTLS
 	HCTypeUDP
 )
 
@@ -154,18 +152,12 @@ func (h HealthcheckType) String() string {
 		return "DNS"
 	case HCTypeHTTP:
 		return "HTTP"
-	// TODO(angusc): Drop HTTPS as a separate type.
-	case HCTypeHTTPS:
-		return "HTTP" // NB: Not HTTPS
 	case HCTypeICMP:
 		return "ICMP"
 	case HCTypeRADIUS:
 		return "RADIUS"
 	case HCTypeTCP:
 		return "TCP"
-	// TODO(angusc): Drop TCPTLS as a separate type.
-	case HCTypeTCPTLS:
-		return "TCP" // NB: Not TCPTLS
 	case HCTypeUDP:
 		return "UDP"
 	}
@@ -474,9 +466,8 @@ type VserverEntry struct {
 	OnePacket     bool
 	HighWatermark float32
 	LowWatermark  float32
-	// TODO(angusc): Rename these:
-	LThreshold int
-	UThreshold int
+	LowerThreshold int
+	UpperThreshold int
 }
 
 // VserverMap provides a map of vservers keyed by vserver name.
@@ -521,7 +512,7 @@ type ServiceStats struct {
 type Destination struct {
 	Name        string
 	VserverName string
-	Weight      int32
+	Weight      uint32
 	Stats       *DestinationStats
 	Backend     *Backend
 	Enabled     bool
@@ -541,7 +532,7 @@ type Destinations []*Destination
 // destination.
 type Backend struct {
 	Host
-	Weight    int32
+	Weight    uint32
 	Enabled   bool
 	InService bool
 }

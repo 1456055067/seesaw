@@ -20,8 +20,11 @@ package config
 // configuration sources and providing notifications on configuration change.
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
+	"net/rpc"
 	"sync"
 	"time"
 
@@ -192,7 +195,9 @@ func (n *Notifier) configCheck() {
 		log.Warning("Config update channel is full. Skipped one config.")
 		return
 	}
+	n.lock.Lock()
 	n.last = note
+	n.lock.Unlock()
 	log.Infof("Sent config update notification")
 
 	if s != SourceDisk {
@@ -291,9 +296,55 @@ func (n *Notifier) configFromDisk() (*Notification, error) {
 	return ReadConfig(n.engineCfg.ClusterFile, n.engineCfg.ClusterName)
 }
 
+// LastNotification returns the most recently applied configuration notification.
+func (n *Notifier) LastNotification() *Notification {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+	return n.last
+}
+
 func (n *Notifier) configFromPeer() (*Notification, error) {
-	// TODO(angusc): Implement this function.
-	return nil, fmt.Errorf("configFromPeer not implemented")
+	peer := n.engineCfg.Peer
+	if peer.IPv4Addr == nil && peer.IPv6Addr == nil {
+		return nil, fmt.Errorf("no peer configured")
+	}
+
+	peerIP := peer.IPv4Addr
+	if peerIP == nil {
+		peerIP = peer.IPv6Addr
+	}
+
+	certs, err := certPool(n.engineCfg.CACertFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load CA certs: %v", err)
+	}
+	cert, err := tls.LoadX509KeyPair(n.engineCfg.CertFile, n.engineCfg.KeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load TLS key pair: %v", err)
+	}
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      certs,
+		ServerName:   peer.Hostname,
+	}
+
+	addr := net.JoinHostPort(peerIP.String(), fmt.Sprintf("%d", n.engineCfg.SyncPort))
+	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to peer %s: %v", addr, err)
+	}
+	client := rpc.NewClient(conn)
+	defer client.Close()
+
+	var note Notification
+	if err := client.Call("SeesawSync.Config", 0, &note); err != nil {
+		return nil, fmt.Errorf("failed to get config from peer: %v", err)
+	}
+	note.Source = SourcePeer
+	note.SourceDetail = addr
+	note.Time = time.Now()
+	return &note, nil
 }
 
 func (n *Notifier) configFromServer() (*Notification, error) {

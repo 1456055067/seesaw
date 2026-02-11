@@ -47,6 +47,7 @@ type DNSChecker struct {
 	Target
 	Question dns.Question
 	Answer   string
+	UseTCP   bool // Use TCP instead of UDP for DNS queries (e.g., for large responses).
 }
 
 // NewDNSChecker returns an initialised DNSChecker.
@@ -62,6 +63,14 @@ func NewDNSChecker(ip net.IP, port int) *DNSChecker {
 			Qtype:  dns.TypeA,
 		},
 	}
+}
+
+// tcpNetwork returns the TCP network name for the DNS checker's target.
+func (hc *DNSChecker) tcpNetwork() string {
+	if hc.IP.To4() != nil {
+		return "tcp4"
+	}
+	return "tcp6"
 }
 
 func questionToString(q dns.Question) string {
@@ -109,8 +118,13 @@ func (hc *DNSChecker) Check(timeout time.Duration) *Result {
 		Question: []dns.Question{hc.Question},
 	}
 
-	// TODO(mharo): don't assume UDP
-	conn, err := dialUDP(hc.network(), hc.addr(), timeout, hc.Mark)
+	var conn net.Conn
+	var err error
+	if hc.UseTCP {
+		conn, err = dialTCP(hc.tcpNetwork(), hc.addr(), timeout, hc.Mark)
+	} else {
+		conn, err = dialUDP(hc.network(), hc.addr(), timeout, hc.Mark)
+	}
 	if err != nil {
 		return complete(start, msg, false, err)
 	}
@@ -148,38 +162,79 @@ func (hc *DNSChecker) Check(timeout time.Duration) *Result {
 		return complete(start, msg, false, nil)
 	}
 
-	// TODO(jsing): Compare query to original?
-	// if q.Question != r.Question ...
+	// Validate that the response question section matches our query.
+	if len(r.Question) > 0 && r.Question[0] != hc.Question {
+		msg = fmt.Sprintf("%s; response question mismatch: got %s, want %s",
+			msg, questionToString(r.Question[0]), questionToString(hc.Question))
+		return complete(start, msg, false, nil)
+	}
+
+	// Build a CNAME chain map for following aliases in A/AAAA queries.
+	cnameMap := make(map[string]string)
+	for _, rr := range r.Answer {
+		if cname, ok := rr.(*dns.CNAME); ok {
+			cnameMap[cname.Hdr.Name] = cname.Target
+		}
+	}
+
+	// resolveCNAME follows CNAME chains to find the canonical name for a given name.
+	resolveCNAME := func(name string) string {
+		seen := make(map[string]bool)
+		for {
+			target, ok := cnameMap[name]
+			if !ok || seen[name] {
+				return name
+			}
+			seen[name] = true
+			name = target
+		}
+	}
 
 	for _, rr := range r.Answer {
-		if rr.Header().Name != hc.Question.Name {
-			continue
-		}
 		if rr.Header().Class != hc.Question.Qclass {
-			continue
-		}
-		if rr.Header().Rrtype != hc.Question.Qtype {
-			// TODO(jsing): Follow CNAMEs for A/AAAA queries.
 			continue
 		}
 
 		switch rr := rr.(type) {
 		case *dns.A:
-			if aIP.Equal(rr.A) {
-				msg = fmt.Sprintf("%s; received answer %s", msg, rr.A)
-				return complete(start, msg, true, err)
+			// For A queries, follow CNAMEs: check if this record's name
+			// is reachable from the question name via CNAME chain.
+			if hc.Question.Qtype == dns.TypeA {
+				canonical := resolveCNAME(hc.Question.Name)
+				if rr.Hdr.Name == canonical && aIP.Equal(rr.A) {
+					msg = fmt.Sprintf("%s; received answer %s", msg, rr.A)
+					return complete(start, msg, true, err)
+				}
 			}
 		case *dns.AAAA:
-			if aIP.Equal(rr.AAAA) {
-				msg = fmt.Sprintf("%s; received answer %s", msg, rr.AAAA)
-				return complete(start, msg, true, err)
+			// For AAAA queries, follow CNAMEs similarly.
+			if hc.Question.Qtype == dns.TypeAAAA {
+				canonical := resolveCNAME(hc.Question.Name)
+				if rr.Hdr.Name == canonical && aIP.Equal(rr.AAAA) {
+					msg = fmt.Sprintf("%s; received answer %s", msg, rr.AAAA)
+					return complete(start, msg, true, err)
+				}
 			}
 		case *dns.CNAME:
-			// TODO(jsing): Implement comparision.
+			if hc.Question.Qtype == dns.TypeCNAME &&
+				rr.Hdr.Name == hc.Question.Name &&
+				strings.EqualFold(rr.Target, hc.Answer+".") {
+				msg = fmt.Sprintf("%s; received CNAME %s", msg, rr.Target)
+				return complete(start, msg, true, err)
+			}
 		case *dns.NS:
-			// TODO(jsing): Implement comparision.
+			if hc.Question.Qtype == dns.TypeNS &&
+				rr.Hdr.Name == hc.Question.Name &&
+				strings.EqualFold(rr.Ns, hc.Answer+".") {
+				msg = fmt.Sprintf("%s; received NS %s", msg, rr.Ns)
+				return complete(start, msg, true, err)
+			}
 		case *dns.SOA:
-			// TODO(jsing): Implement comparision.
+			if hc.Question.Qtype == dns.TypeSOA &&
+				rr.Hdr.Name == hc.Question.Name {
+				msg = fmt.Sprintf("%s; received SOA %s %s", msg, rr.Ns, rr.Mbox)
+				return complete(start, msg, true, err)
+			}
 		}
 	}
 

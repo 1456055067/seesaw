@@ -1,0 +1,17 @@
+[package]
+name = "vrrp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+common = { path = "../common" }
+tokio.workspace = true
+nix.workspace = true
+socket2.workspace = true
+bytes.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

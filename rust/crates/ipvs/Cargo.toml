@@ -1,0 +1,22 @@
+[package]
+name = "ipvs"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+common = { path = "../common" }
+netlink-packet-core.workspace = true
+netlink-packet-generic.workspace = true
+netlink-sys.workspace = true
+nix.workspace = true
+libc.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+bytes.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

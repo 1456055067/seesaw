@@ -1,0 +1,69 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/common",
+    "crates/ipvs",
+    "crates/ipvs-ffi",
+    "crates/vrrp",
+    "crates/healthcheck",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Seesaw Contributors"]
+license = "Apache-2.0"
+repository = "https://github.com/google/seesaw"
+rust-version = "1.93"
+
+[workspace.dependencies]
+# Async runtime and utilities
+tokio = { version = "1.40", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+
+# gRPC and protobuf
+tonic = "0.14"
+tonic-build = "0.14"
+prost = "0.14"
+prost-types = "0.14"
+
+# Netlink communication
+netlink-packet-core = "0.8"
+netlink-packet-generic = "0.4"
+netlink-sys = "0.8"
+
+# System-level operations
+nix = { version = "0.31", features = ["socket", "net", "sched"] }
+libc = "0.2"
+
+# Error handling and logging
+thiserror = "2"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Networking and data structures
+bytes = "1.7"
+socket2 = { version = "0.6", features = ["all"] }
+
+# Testing and benchmarking
+criterion = { version = "0.8", features = ["html_reports"] }
+mockall = "0.14"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.bench]
+inherits = "release"
+
+[profile.dev]
+opt-level = 0
+debug = true

@@ -25,6 +25,7 @@
 //! # }
 //! ```
 
+mod netlink;
 mod types;
 
 pub use types::{
@@ -33,19 +34,32 @@ pub use types::{
 };
 
 use common::{Error, Result};
+use netlink::NetlinkSocket;
 
 /// IPVS Manager - main interface for IPVS operations.
 pub struct IPVSManager {
-    family: u16,
+    socket: NetlinkSocket,
 }
 
 impl IPVSManager {
     /// Create a new IPVS manager instance.
     ///
     /// This initializes the netlink connection and queries the IPVS generic netlink family.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The netlink socket cannot be created
+    /// - The IPVS kernel module is not loaded
+    /// - Insufficient permissions (requires CAP_NET_ADMIN)
     pub fn new() -> Result<Self> {
-        // TODO: Implement netlink family lookup
-        Err(Error::ipvs("Not yet implemented"))
+        let socket = NetlinkSocket::new()?;
+        Ok(Self { socket })
+    }
+
+    /// Get the IPVS family ID.
+    pub fn family_id(&self) -> u16 {
+        self.socket.family_id()
     }
 
     /// Get the IPVS version from the kernel.

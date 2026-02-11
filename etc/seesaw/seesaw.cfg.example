@@ -8,6 +8,15 @@ peer_ipv6 = 2015:cafe::3
 vip_ipv4 = 192.168.10.1
 vip_ipv6 = 2015:cafe::1
 
+# Anycast network ranges. Omit a line to disable that address family.
+# Both IPv4 and IPv6 are enabled by default (192.168.255.0/24, 2015:cafe:ffff::/64).
+# For IPv4-only: set only ipv4
+# For IPv6-only: set only ipv6
+# For dual-stack: set both
+[anycast_ranges]
+# ipv4 = 10.0.255.0/24
+# ipv6 = 2001:db8:ffff::/64
+
 [config_server]
 primary = seesaw-config1.example.com
 secondary = seesaw-config2.example.com

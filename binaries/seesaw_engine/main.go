@@ -78,6 +78,17 @@ func cfgIP(cfg *conf.ConfigFile, section, option string) (net.IP, error) {
 	return ip, nil
 }
 
+// filterAnycastIPs returns only the IPs that fall within the current anycast ranges.
+func filterAnycastIPs(ips []net.IP) []net.IP {
+	var filtered []net.IP
+	for _, ip := range ips {
+		if seesaw.IsAnycast(ip) {
+			filtered = append(filtered, ip)
+		}
+	}
+	return filtered
+}
+
 func main() {
 	flag.Parse()
 
@@ -171,9 +182,36 @@ func main() {
 		lbInterface = opt
 	}
 
+	// Custom anycast network ranges (must be parsed before extra_service_anycast).
+	var anycastIPv4, anycastIPv6 *net.IPNet
+	if cfg.HasSection("anycast_ranges") {
+		if ipv4Str := cfgOpt(cfg, "anycast_ranges", "ipv4"); ipv4Str != "" {
+			_, ipv4Net, err := net.ParseCIDR(ipv4Str)
+			if err != nil {
+				log.Exitf("Invalid anycast_ranges ipv4 %q: %v", ipv4Str, err)
+			}
+			anycastIPv4 = ipv4Net
+		}
+		if ipv6Str := cfgOpt(cfg, "anycast_ranges", "ipv6"); ipv6Str != "" {
+			_, ipv6Net, err := net.ParseCIDR(ipv6Str)
+			if err != nil {
+				log.Exitf("Invalid anycast_ranges ipv6 %q: %v", ipv6Str, err)
+			}
+			anycastIPv6 = ipv6Net
+		}
+		seesaw.SetAnycastNetworks(anycastIPv4, anycastIPv6)
+	}
+
 	// Additional anycast addresses.
 	serviceAnycastIPv4 := config.DefaultEngineConfig().ServiceAnycastIPv4
 	serviceAnycastIPv6 := config.DefaultEngineConfig().ServiceAnycastIPv6
+	// Clear default service anycast IPs if they fall outside the configured ranges.
+	if anycastIPv4 != nil {
+		serviceAnycastIPv4 = filterAnycastIPs(serviceAnycastIPv4)
+	}
+	if anycastIPv6 != nil {
+		serviceAnycastIPv6 = filterAnycastIPs(serviceAnycastIPv6)
+	}
 	if cfg.HasSection("extra_service_anycast") {
 		opts, err := cfg.GetOptions("extra_service_anycast")
 		if err != nil {

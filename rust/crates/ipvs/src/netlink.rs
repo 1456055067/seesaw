@@ -16,6 +16,8 @@ use netlink_packet_generic::{
 use netlink_sys::{protocols::NETLINK_GENERIC, Socket, SocketAddr};
 use tracing::{debug, trace};
 
+use crate::messages::IPVSMessage;
+
 /// IPVS generic netlink family name
 const IPVS_GENL_NAME: &str = "IPVS";
 
@@ -152,21 +154,30 @@ impl NetlinkSocket {
         Ok(message)
     }
 
-    /// Send an IPVS command with attributes.
-    ///
-    /// TODO: This needs proper implementation with netlink attribute serialization.
-    /// For now, this is a placeholder that will be implemented when we add
-    /// proper IPVS message types that implement NetlinkSerializable/Deserializable.
-    ///
-    /// The implementation will need to:
-    /// 1. Create a proper GenlMessage with IPVS family ID
-    /// 2. Serialize Service/Destination structs to netlink attributes
-    /// 3. Handle nested attributes (stats, flags, etc.)
-    /// 4. Parse responses with nested attribute structures
-    #[allow(dead_code)]
-    pub fn send_ipvs_command(&mut self, _cmd: u8, _payload: &[u8]) -> Result<Vec<u8>> {
-        // Placeholder - will be implemented with proper message types
-        Err(Error::ipvs("IPVS command serialization not yet implemented"))
+    /// Send an IPVS command and receive a response.
+    pub fn send_ipvs_command(&mut self, message: IPVSMessage) -> Result<IPVSMessage> {
+        let mut genlmsg: GenlMessage<IPVSMessage> = GenlMessage::from_payload(message);
+        genlmsg.set_resolved_family_id(self.family_id);
+
+        let mut nlmsg = NetlinkMessage::from(genlmsg);
+        nlmsg.header.flags = NLM_F_REQUEST;
+        nlmsg.header.sequence_number = self.next_sequence();
+
+        // Send request
+        self.send_message(&nlmsg)?;
+
+        // Receive response
+        let response: NetlinkMessage<GenlMessage<IPVSMessage>> = self.receive_message()?;
+
+        // Parse response
+        match response.payload {
+            NetlinkPayload::InnerMessage(genlmsg) => Ok(genlmsg.payload),
+            NetlinkPayload::Error(err) => Err(Error::netlink(format!(
+                "IPVS command failed: error code {:?}",
+                err.code
+            ))),
+            _ => Err(Error::netlink("Unexpected netlink response type")),
+        }
     }
 }
 

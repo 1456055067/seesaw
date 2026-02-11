@@ -31,6 +31,7 @@ prost-types = "0.14"
 # Netlink communication
 netlink-packet-core = "0.8"
 netlink-packet-generic = "0.4"
+netlink-packet-utils = "0.6"
 netlink-sys = "0.8"
 
 # System-level operations

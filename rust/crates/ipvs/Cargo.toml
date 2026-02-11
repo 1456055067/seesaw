@@ -11,6 +11,7 @@ rust-version.workspace = true
 common = { path = "../common" }
 netlink-packet-core.workspace = true
 netlink-packet-generic.workspace = true
+netlink-packet-utils.workspace = true
 netlink-sys.workspace = true
 nix.workspace = true
 libc.workspace = true

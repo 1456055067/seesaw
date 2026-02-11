@@ -26,6 +26,7 @@
 //! ```
 
 mod commands;
+mod messages;
 mod netlink;
 mod types;
 
@@ -36,6 +37,7 @@ pub use types::{
 };
 
 use common::{Error, Result};
+use messages::{IPVSMessage, InfoNla, IPVSNla};
 use netlink::NetlinkSocket;
 
 /// IPVS Manager - main interface for IPVS operations.
@@ -65,15 +67,37 @@ impl IPVSManager {
     }
 
     /// Get the IPVS version from the kernel.
-    pub fn version(&self) -> Result<IPVSVersion> {
-        // TODO: Implement IPVS_CMD_GET_INFO
-        Err(Error::ipvs("Not yet implemented"))
+    pub fn version(&mut self) -> Result<IPVSVersion> {
+        let message = IPVSMessage::new(commands::IPVSCommand::GetInfo);
+        let response = self.socket.send_ipvs_command(message)?;
+
+        // Extract version from response
+        for nla in &response.nlas {
+            if let IPVSNla::Info(info_nlas) = nla {
+                for info_nla in info_nlas {
+                    if let InfoNla::Version(version_raw) = info_nla {
+                        // Version is encoded as: (major << 16) | (minor << 8) | patch
+                        let major = (version_raw >> 16) & 0xFFFF;
+                        let minor = (version_raw >> 8) & 0xFF;
+                        let patch = version_raw & 0xFF;
+                        return Ok(IPVSVersion {
+                            major,
+                            minor,
+                            patch,
+                        });
+                    }
+                }
+            }
+        }
+
+        Err(Error::ipvs("Version not found in IPVS_CMD_GET_INFO response"))
     }
 
     /// Flush all services and destinations from IPVS.
     pub fn flush(&mut self) -> Result<()> {
-        // TODO: Implement IPVS_CMD_FLUSH
-        Err(Error::ipvs("Not yet implemented"))
+        let message = IPVSMessage::new(commands::IPVSCommand::Flush);
+        let _response = self.socket.send_ipvs_command(message)?;
+        Ok(())
     }
 
     /// Add a new service to IPVS.

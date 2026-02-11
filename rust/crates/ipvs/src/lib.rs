@@ -25,9 +25,11 @@
 //! # }
 //! ```
 
+mod commands;
 mod netlink;
 mod types;
 
+pub use commands::IPVSCommand;
 pub use types::{
     Destination, DestinationFlags, DestinationStats, IPVSVersion, Protocol, Scheduler, Service,
     ServiceFlags, ServiceStats,

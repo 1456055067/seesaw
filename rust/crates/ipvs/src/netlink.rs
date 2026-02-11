@@ -152,11 +152,21 @@ impl NetlinkSocket {
         Ok(message)
     }
 
-    /// Send a generic netlink command (will be implemented when needed for IPVS commands).
+    /// Send an IPVS command with attributes.
+    ///
+    /// TODO: This needs proper implementation with netlink attribute serialization.
+    /// For now, this is a placeholder that will be implemented when we add
+    /// proper IPVS message types that implement NetlinkSerializable/Deserializable.
+    ///
+    /// The implementation will need to:
+    /// 1. Create a proper GenlMessage with IPVS family ID
+    /// 2. Serialize Service/Destination structs to netlink attributes
+    /// 3. Handle nested attributes (stats, flags, etc.)
+    /// 4. Parse responses with nested attribute structures
     #[allow(dead_code)]
-    pub fn send_command(&mut self, _cmd: u8, _flags: u16) -> Result<Vec<u8>> {
-        // This will be implemented when we define IPVS-specific message types
-        Err(Error::ipvs("send_command not yet implemented"))
+    pub fn send_ipvs_command(&mut self, _cmd: u8, _payload: &[u8]) -> Result<Vec<u8>> {
+        // Placeholder - will be implemented with proper message types
+        Err(Error::ipvs("IPVS command serialization not yet implemented"))
     }
 }
 

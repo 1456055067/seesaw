@@ -39,7 +39,7 @@ Last Updated: 2026-02-11
 **Commits:**
 - `5362de3` - Netlink socket and family resolution
 
-#### 1.4 IPVS Commands and Attributes (PARTIAL)
+#### 1.4 IPVS Commands and Attributes (COMPLETE - Structure)
 - [x] Defined all IPVS command enums (GetInfo, NewService, etc.)
 - [x] Defined attribute enums for:
   - Top-level attributes (`IPVSAttr`)
@@ -47,14 +47,27 @@ Last Updated: 2026-02-11
   - Destination attributes (`IPVSDestAttr`)
   - Statistics attributes (`IPVSStatsAttr`)
   - Info attributes (`IPVSInfoAttr`)
+- [x] Added placeholder `send_ipvs_command()` method with TODO documentation
 
 **Commits:**
 - `f8b73fb` - Command and attribute definitions
 
 ### 🚧 In Progress
 
-#### 1.4 Implement IPVS Operations API
-**Next Steps:**
+#### 1.4 Implement IPVS Operations API (BLOCKED)
+
+**Current Blocker:**
+The implementation requires proper netlink attribute serialization/deserialization.
+We need to create wrapper types that implement `NetlinkSerializable` and
+`NetlinkDeserializable` traits for IPVS messages.
+
+**What's Needed:**
+1. Create IPVS message wrapper types (similar to `GenlCtrl`)
+2. Implement `Emitable` trait for serializing Service/Destination to netlink attributes
+3. Implement `Parseable` trait for parsing responses
+4. Handle nested attributes properly (service contains stats, flags, etc.)
+
+**Next Steps After Unblocking:**
 1. Implement `version()` method
    - Send `IPVS_CMD_GET_INFO`
    - Parse version from response attributes
@@ -144,16 +157,19 @@ rust/
 ## Estimated Progress
 
 **Phase 1: IPVS Bindings**
-- Overall: **60% complete**
+- Overall: **50% complete**
   - Setup: ✅ 100%
   - Types: ✅ 100%
   - Netlink: ✅ 100%
-  - Commands: ✅ 100%
-  - Operations: 🚧 30% (stubs exist, implementations needed)
+  - Commands: ✅ 100% (definitions done, serialization TODO)
+  - Operations: 🚧 20% (stubs exist, need serialization layer)
   - Testing: ⏹️ 0%
   - FFI Bridge: ⏹️ 0%
 
-**Total Migration Progress: ~20% (Phase 1 of 3)**
+**Total Migration Progress: ~17% (Phase 1 of 3)**
+
+**Key Blocker:** Netlink attribute serialization layer needs implementation before
+operations can be completed.
 
 ## Resources
 

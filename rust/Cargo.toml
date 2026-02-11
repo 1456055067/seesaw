@@ -5,6 +5,7 @@ members = [
     "crates/ipvs",
     "crates/ipvs-ffi",
     "crates/vrrp",
+    "crates/vrrp-ffi",
     "crates/healthcheck",
 ]
 

@@ -1,0 +1,14 @@
+language = "C"
+include_guard = "VRRP_FFI_H"
+documentation = true
+cpp_compat = true
+pragma_once = false
+
+[export]
+include = ["CVrrpConfig", "CVrrpState", "CVrrpStats"]
+
+[export.rename]
+"CVrrpConfig" = "vrrp_config_t"
+"CVrrpState" = "vrrp_state_t"
+"CVrrpStats" = "vrrp_stats_t"
+"VrrpHandle" = "vrrp_handle_t"

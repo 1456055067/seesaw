@@ -10,8 +10,13 @@ rust-version.workspace = true
 [dependencies]
 common = { path = "../common" }
 tokio.workspace = true
+async-trait.workspace = true
 nix.workspace = true
 socket2.workspace = true
 bytes.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+libc.workspace = true
+
+[dev-dependencies]
+tokio-test = "0.4"

@@ -101,21 +101,33 @@ impl IPVSManager {
     }
 
     /// Add a new service to IPVS.
-    pub fn add_service(&mut self, _service: &Service) -> Result<()> {
-        // TODO: Implement IPVS_CMD_NEW_SERVICE
-        Err(Error::ipvs("Not yet implemented"))
+    pub fn add_service(&mut self, service: &Service) -> Result<()> {
+        let service_nlas = service.to_service_nlas();
+        let nlas = vec![IPVSNla::Service(service_nlas)];
+        let message = IPVSMessage::with_nlas(commands::IPVSCommand::NewService, nlas);
+
+        let _response = self.socket.send_ipvs_command(message)?;
+        Ok(())
     }
 
     /// Update an existing service in IPVS.
-    pub fn update_service(&mut self, _service: &Service) -> Result<()> {
-        // TODO: Implement IPVS_CMD_SET_SERVICE
-        Err(Error::ipvs("Not yet implemented"))
+    pub fn update_service(&mut self, service: &Service) -> Result<()> {
+        let service_nlas = service.to_service_nlas();
+        let nlas = vec![IPVSNla::Service(service_nlas)];
+        let message = IPVSMessage::with_nlas(commands::IPVSCommand::SetService, nlas);
+
+        let _response = self.socket.send_ipvs_command(message)?;
+        Ok(())
     }
 
     /// Delete a service from IPVS.
-    pub fn delete_service(&mut self, _service: &Service) -> Result<()> {
-        // TODO: Implement IPVS_CMD_DEL_SERVICE
-        Err(Error::ipvs("Not yet implemented"))
+    pub fn delete_service(&mut self, service: &Service) -> Result<()> {
+        let service_nlas = service.to_service_nlas();
+        let nlas = vec![IPVSNla::Service(service_nlas)];
+        let message = IPVSMessage::with_nlas(commands::IPVSCommand::DelService, nlas);
+
+        let _response = self.socket.send_ipvs_command(message)?;
+        Ok(())
     }
 
     /// Get a specific service by its key.

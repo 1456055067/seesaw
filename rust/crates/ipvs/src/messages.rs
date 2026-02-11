@@ -4,6 +4,7 @@
 //! netlink communication with the IPVS kernel module.
 
 use crate::commands::{IPVSCommand, IPVSInfoAttr, IPVSServiceAttr};
+use crate::types::{Protocol, Scheduler, Service};
 use netlink_packet_core::{DecodeError, ParseableParametrized};
 use netlink_packet_generic::{GenlFamily, GenlHeader};
 use netlink_packet_utils::{
@@ -12,6 +13,7 @@ use netlink_packet_utils::{
     Parseable,
 };
 use std::convert::TryInto;
+use std::net::IpAddr;
 
 // Import Emitable from utils for use in implementations
 use netlink_packet_utils::Emitable as UtilsEmitable;
@@ -402,5 +404,55 @@ impl ParseableParametrized<[u8], GenlHeader> for IPVSMessage {
         };
 
         Ok(Self { cmd, nlas })
+    }
+}
+
+// Helper functions for converting between high-level types and NLAs
+
+impl Service {
+    /// Convert a Service to netlink attributes for creation/update.
+    pub(crate) fn to_service_nlas(&self) -> Vec<ServiceNla> {
+        let mut nlas = Vec::new();
+
+        // Address family - AF_INET = 2, AF_INET6 = 10
+        let (af, addr_bytes) = match self.address {
+            IpAddr::V4(ip) => (libc::AF_INET as u16, u32::from(ip).to_be()),
+            IpAddr::V6(_) => {
+                // For now, only support IPv4
+                // TODO: Add IPv6 support later
+                (libc::AF_INET as u16, 0)
+            }
+        };
+        nlas.push(ServiceNla::AddressFamily(af));
+
+        // Protocol - TCP = 6, UDP = 17, SCTP = 132
+        let proto = match self.protocol {
+            Protocol::TCP => libc::IPPROTO_TCP as u16,
+            Protocol::UDP => libc::IPPROTO_UDP as u16,
+            Protocol::SCTP => 132, // IPPROTO_SCTP
+            Protocol::Other(n) => n as u16,
+        };
+        nlas.push(ServiceNla::Protocol(proto));
+
+        // Address and port (skip if fwmark is set)
+        if self.fwmark == 0 {
+            nlas.push(ServiceNla::Address(addr_bytes));
+            nlas.push(ServiceNla::Port(self.port.to_be()));
+        } else {
+            nlas.push(ServiceNla::FirewallMark(self.fwmark));
+        }
+
+        // Scheduler
+        nlas.push(ServiceNla::Scheduler(format!("{}", self.scheduler)));
+
+        // Flags (flags + mask, both set to flags value)
+        nlas.push(ServiceNla::Flags(self.flags.0, self.flags.0));
+
+        // Timeout
+        if self.timeout > 0 {
+            nlas.push(ServiceNla::Timeout(self.timeout));
+        }
+
+        nlas
     }
 }

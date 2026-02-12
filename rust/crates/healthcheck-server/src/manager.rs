@@ -22,6 +22,9 @@ pub struct Manager {
 
     /// Configuration update receiver
     config_rx: mpsc::Receiver<Vec<HealthcheckConfig>>,
+
+    /// Monitor polling interval
+    monitor_interval: Duration,
 }
 
 /// State for a single monitor
@@ -39,11 +42,13 @@ impl Manager {
     pub fn new(
         notify_tx: mpsc::Sender<Notification>,
         config_rx: mpsc::Receiver<Vec<HealthcheckConfig>>,
+        monitor_interval: Duration,
     ) -> Self {
         Self {
             monitors: Arc::new(DashMap::new()),
             notify_tx,
             config_rx,
+            monitor_interval,
         }
     }
 
@@ -54,8 +59,9 @@ impl Manager {
         // Spawn monitor tasks
         let monitors_clone = self.monitors.clone();
         let notify_tx_clone = self.notify_tx.clone();
+        let monitor_interval = self.monitor_interval;
         tokio::spawn(async move {
-            Self::monitor_task(monitors_clone, notify_tx_clone).await;
+            Self::monitor_task(monitors_clone, notify_tx_clone, monitor_interval).await;
         });
 
         // Handle configuration updates
@@ -172,8 +178,9 @@ impl Manager {
     async fn monitor_task(
         monitors: Arc<DashMap<HealthcheckId, MonitorState>>,
         notify_tx: mpsc::Sender<Notification>,
+        monitor_interval: Duration,
     ) {
-        let mut interval = tokio::time::interval(Duration::from_millis(500));
+        let mut interval = tokio::time::interval(monitor_interval);
 
         loop {
             interval.tick().await;

@@ -24,12 +24,12 @@ impl HealthcheckServer {
 
         // Create channels
         let (notify_tx, notify_rx) = mpsc::channel::<Notification>(self.config.channel_size);
-        let (config_tx, config_rx) = mpsc::channel::<Vec<HealthcheckConfig>>(10);
+        let (config_tx, config_rx) = mpsc::channel::<Vec<HealthcheckConfig>>(self.config.config_channel_size);
         let (to_proxy_tx, to_proxy_rx) = mpsc::channel::<ServerToProxyMsg>(self.config.channel_size);
-        let (from_proxy_tx, from_proxy_rx) = mpsc::channel::<ProxyToServerMsg>(10);
+        let (from_proxy_tx, from_proxy_rx) = mpsc::channel::<ProxyToServerMsg>(self.config.proxy_channel_size);
 
         // Create components
-        let manager = Manager::new(notify_tx, config_rx);
+        let manager = Manager::new(notify_tx, config_rx, self.config.manager_monitor_interval);
         let notifier = Notifier::new(
             notify_rx,
             to_proxy_tx.clone(),

@@ -1,6 +1,6 @@
 //! Seesaw Healthcheck Server binary
 
-use healthcheck_server::{HealthcheckServer, ServerConfig};
+use healthcheck_server::{Config, HealthcheckServer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -16,8 +16,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Seesaw Healthcheck Server starting");
 
-    // Create server with default config
-    let config = ServerConfig::default();
+    // Load configuration
+    let config = match Config::load() {
+        Ok(cfg) => {
+            tracing::info!("Configuration loaded successfully");
+            cfg.to_server_config()
+        }
+        Err(e) => {
+            eprintln!("Configuration error: {}", e);
+            eprintln!("Using default configuration");
+            healthcheck_server::ServerConfig::default()
+        }
+    };
+
     let server = HealthcheckServer::new(config);
 
     // Run server

@@ -30,10 +30,12 @@ pub mod metrics;
 pub mod notifier;
 pub mod proxy;
 pub mod server;
+pub mod telemetry;
 pub mod types;
 
 pub use config::{Config, ConfigError};
 pub use http_server::MetricsServer;
 pub use metrics::MetricsRegistry;
 pub use server::HealthcheckServer;
+pub use telemetry::{init_telemetry, init_telemetry_http, setup_tracing_with_otel, TelemetryGuard};
 pub use types::ServerConfig;

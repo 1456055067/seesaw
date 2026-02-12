@@ -370,6 +370,47 @@ See **[Metrics Reference Guide](../../../docs/healthcheck-server-metrics.md)** f
 - Alerting rule examples
 - Performance impact analysis (< 0.01% CPU overhead)
 
+### OpenTelemetry Distributed Tracing
+
+The healthcheck server supports OpenTelemetry for distributed tracing and performance analysis:
+
+**Enable tracing in configuration:**
+
+```yaml
+telemetry:
+  enabled: true
+  service_name: "healthcheck-server"
+  otlp_endpoint: "http://localhost:4317"  # Jaeger OTLP endpoint
+  use_http: false  # Use gRPC (recommended)
+  sampling_rate: 1.0  # Sample 100% (reduce in production)
+```
+
+**Quick Start with Jaeger:**
+
+```bash
+# Start Jaeger all-in-one
+docker-compose -f docker-compose.jaeger.yml up -d
+
+# Start healthcheck-server with telemetry enabled
+cargo run -p healthcheck-server --release
+
+# View traces in Jaeger UI
+# http://localhost:16686
+```
+
+**Features:**
+- **Distributed tracing**: End-to-end request flow visibility
+- **Performance analysis**: Detailed timing breakdowns for healthcheck operations
+- **Correlation**: Link traces with Prometheus metrics via trace IDs
+- **Flexible backends**: Jaeger, Zipkin, or any OTLP-compatible collector
+
+See **[OPENTELEMETRY.md](./OPENTELEMETRY.md)** for complete guide including:
+- Configuration reference and examples
+- Trace structure and span details
+- Backend setup (Jaeger, Zipkin, OpenTelemetry Collector)
+- Troubleshooting and best practices
+- Performance impact analysis (< 0.5% CPU overhead)
+
 ### Log Messages
 
 ```

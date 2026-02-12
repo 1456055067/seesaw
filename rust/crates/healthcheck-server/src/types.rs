@@ -58,6 +58,21 @@ pub struct ServerConfig {
 
     /// Histogram buckets for batch size
     pub metrics_batch_size_buckets: Vec<f64>,
+
+    /// Enable OpenTelemetry tracing
+    pub telemetry_enabled: bool,
+
+    /// Service name for OpenTelemetry
+    pub telemetry_service_name: String,
+
+    /// OTLP exporter endpoint
+    pub telemetry_otlp_endpoint: String,
+
+    /// Use HTTP instead of gRPC for OTLP
+    pub telemetry_use_http: bool,
+
+    /// Sampling rate (0.0 to 1.0)
+    pub telemetry_sampling_rate: f64,
 }
 
 impl Default for ServerConfig {
@@ -81,6 +96,11 @@ impl Default for ServerConfig {
             ],
             metrics_batch_delay_buckets: vec![0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.5, 1.0],
             metrics_batch_size_buckets: vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 5000.0],
+            telemetry_enabled: false,
+            telemetry_service_name: "healthcheck-server".to_string(),
+            telemetry_otlp_endpoint: "http://localhost:4317".to_string(),
+            telemetry_use_http: false,
+            telemetry_sampling_rate: 1.0,
         }
     }
 }

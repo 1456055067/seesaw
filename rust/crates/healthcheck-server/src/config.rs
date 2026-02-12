@@ -50,6 +50,9 @@ pub struct Config {
 
     #[serde(default)]
     pub metrics: MetricsSettings,
+
+    #[serde(default)]
+    pub telemetry: TelemetrySettings,
 }
 
 impl Validate for Config {
@@ -59,6 +62,7 @@ impl Validate for Config {
         self.channels.validate()?;
         self.manager.validate()?;
         self.metrics.validate()?;
+        self.telemetry.validate()?;
         Ok(())
     }
 }
@@ -144,6 +148,30 @@ pub struct MetricsSettings {
     pub batch_size_buckets: Vec<f64>,
 }
 
+/// OpenTelemetry settings
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct TelemetrySettings {
+    /// Enable OpenTelemetry tracing
+    pub enabled: bool,
+
+    /// Service name for OpenTelemetry
+    #[validate(length(min = 1))]
+    pub service_name: String,
+
+    /// OTLP exporter endpoint (gRPC)
+    /// Example: "http://localhost:4317"
+    #[validate(length(min = 1))]
+    pub otlp_endpoint: String,
+
+    /// Use HTTP instead of gRPC for OTLP export
+    pub use_http: bool,
+
+    /// Sampling rate (0.0 to 1.0)
+    /// 1.0 = sample all traces, 0.1 = sample 10%
+    #[validate(range(min = 0.0, max = 1.0))]
+    pub sampling_rate: f64,
+}
+
 // Default implementations
 
 impl Default for ServerSettings {
@@ -215,6 +243,18 @@ impl Default for MetricsSettings {
     }
 }
 
+impl Default for TelemetrySettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            service_name: "healthcheck-server".to_string(),
+            otlp_endpoint: "http://localhost:4317".to_string(),
+            use_http: false,
+            sampling_rate: 1.0,
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -225,6 +265,7 @@ impl Default for Config {
             advanced: AdvancedSettings::default(),
             logging: LoggingSettings::default(),
             metrics: MetricsSettings::default(),
+            telemetry: TelemetrySettings::default(),
         }
     }
 }
@@ -326,6 +367,11 @@ impl Config {
             metrics_response_time_buckets: self.metrics.response_time_buckets.clone(),
             metrics_batch_delay_buckets: self.metrics.batch_delay_buckets.clone(),
             metrics_batch_size_buckets: self.metrics.batch_size_buckets.clone(),
+            telemetry_enabled: self.telemetry.enabled,
+            telemetry_service_name: self.telemetry.service_name.clone(),
+            telemetry_otlp_endpoint: self.telemetry.otlp_endpoint.clone(),
+            telemetry_use_http: self.telemetry.use_http,
+            telemetry_sampling_rate: self.telemetry.sampling_rate,
         }
     }
 }

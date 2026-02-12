@@ -41,6 +41,12 @@ axum = "0.7"
 tower = "0.5"
 tower-http = { version = "0.6", features = ["trace"] }
 
+# OpenTelemetry
+opentelemetry = { version = "0.27", features = ["trace", "metrics"] }
+opentelemetry_sdk = { version = "0.27", features = ["trace", "rt-tokio"] }
+opentelemetry-otlp = { version = "0.27", features = ["trace", "metrics", "grpc-tonic", "http-proto"] }
+tracing-opentelemetry = "0.28"
+
 [dev-dependencies]
 tokio-test = "0.4"
 criterion = { version = "0.5", features = ["html_reports"] }

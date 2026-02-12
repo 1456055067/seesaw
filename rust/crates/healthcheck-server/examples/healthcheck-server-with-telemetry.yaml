@@ -1,0 +1,37 @@
+# Healthcheck server configuration with OpenTelemetry tracing enabled
+# This configuration demonstrates full observability with metrics + tracing
+
+server:
+  proxy_socket: "/var/run/seesaw/healthcheck-proxy.sock"
+
+batching:
+  delay: 100ms
+  max_size: 100
+
+channels:
+  notification: 1000
+  config_update: 10
+  proxy_message: 10
+
+manager:
+  monitor_interval: 500ms
+
+# Prometheus metrics
+metrics:
+  enabled: true
+  listen_addr: "0.0.0.0:9090"
+  response_time_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+  batch_delay_buckets: [0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.5, 1.0]
+  batch_size_buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 5000]
+
+# OpenTelemetry distributed tracing
+telemetry:
+  enabled: true
+  service_name: "healthcheck-server"
+  otlp_endpoint: "http://localhost:4317"  # Jaeger OTLP gRPC endpoint
+  use_http: false  # Use gRPC for best performance
+  sampling_rate: 1.0  # Sample 100% of traces (reduce in production)
+
+logging:
+  level: "info"
+  format: "text"

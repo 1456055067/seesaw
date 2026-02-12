@@ -1,0 +1,49 @@
+# Docker Compose for Jaeger tracing backend
+# Used to visualize OpenTelemetry traces from healthcheck-server
+
+version: '3.8'
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: healthcheck-jaeger
+    ports:
+      # Jaeger UI
+      - "16686:16686"  # Web UI for viewing traces
+
+      # OTLP receivers (for healthcheck-server)
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+
+      # Jaeger receivers (legacy, not used by healthcheck-server)
+      - "6831:6831/udp"  # Jaeger compact thrift (agent)
+      - "6832:6832/udp"  # Jaeger binary thrift (agent)
+      - "5778:5778"      # Jaeger HTTP (agent config)
+      - "14268:14268"    # Jaeger HTTP (collector)
+      - "14250:14250"    # Jaeger gRPC (collector)
+      - "9411:9411"      # Zipkin HTTP (collector)
+
+    environment:
+      # Storage configuration (in-memory for development)
+      - SPAN_STORAGE_TYPE=memory
+
+      # Memory limits
+      - MEMORY_MAX_TRACES=10000
+
+      # OTLP receiver configuration
+      - COLLECTOR_OTLP_ENABLED=true
+
+      # Log level
+      - LOG_LEVEL=info
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Linux support for accessing host
+
+    restart: unless-stopped
+
+    networks:
+      - tracing
+
+networks:
+  tracing:
+    driver: bridge

@@ -1,38 +1,63 @@
 //! Seesaw Healthcheck Server binary
 
-use healthcheck_server::{Config, HealthcheckServer};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use healthcheck_server::{setup_tracing_with_otel, Config, HealthcheckServer};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize tracing
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "healthcheck_server=info".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
-    tracing::info!("Seesaw Healthcheck Server starting");
-
-    // Load configuration
-    let config = match Config::load() {
+    // Load configuration first (needed for telemetry settings)
+    let yaml_config = match Config::load() {
         Ok(cfg) => {
-            tracing::info!("Configuration loaded successfully");
-            cfg.to_server_config()
+            // Can't use tracing yet - not initialized
+            Some(cfg)
         }
         Err(e) => {
             eprintln!("Configuration error: {}", e);
             eprintln!("Using default configuration");
-            healthcheck_server::ServerConfig::default()
+            None
         }
     };
 
-    let server = HealthcheckServer::new(config);
+    // Get telemetry settings
+    let (telemetry_enabled, service_name, otlp_endpoint, log_level) = if let Some(ref cfg) = yaml_config
+    {
+        (
+            cfg.telemetry.enabled,
+            cfg.telemetry.service_name.clone(),
+            cfg.telemetry.otlp_endpoint.clone(),
+            cfg.logging.level.clone().unwrap_or_else(|| "info".to_string()),
+        )
+    } else {
+        (false, "healthcheck-server".to_string(), "http://localhost:4317".to_string(), "info".to_string())
+    };
+
+    // Initialize tracing with OpenTelemetry (if enabled)
+    let _telemetry_guard = setup_tracing_with_otel(
+        &service_name,
+        &otlp_endpoint,
+        telemetry_enabled,
+        &log_level,
+    )
+    .await?;
+
+    tracing::info!("Seesaw Healthcheck Server starting");
+
+    // Convert to ServerConfig
+    let server_config = yaml_config
+        .map(|cfg| {
+            tracing::info!("Configuration loaded successfully");
+            cfg.to_server_config()
+        })
+        .unwrap_or_else(|| {
+            tracing::warn!("Using default configuration");
+            healthcheck_server::ServerConfig::default()
+        });
+
+    let server = HealthcheckServer::new(server_config);
 
     // Run server
     server.run().await?;
+
+    // Telemetry guard will flush spans on drop
 
     Ok(())
 }

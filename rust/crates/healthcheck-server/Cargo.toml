@@ -20,7 +20,10 @@ tracing-subscriber.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml = "0.9"
 humantime-serde = "1.1"
+validator = { version = "0.16", features = ["derive"] }
+dirs = "5.0"
 
 # Async channels and synchronization
 tokio-stream = "0.1"

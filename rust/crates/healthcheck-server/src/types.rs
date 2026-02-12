@@ -34,6 +34,15 @@ pub struct ServerConfig {
 
     /// Socket path for Go proxy communication
     pub proxy_socket: String,
+
+    /// Config update channel buffer size
+    pub config_channel_size: usize,
+
+    /// Proxy message channel buffer size
+    pub proxy_channel_size: usize,
+
+    /// Manager monitor polling interval
+    pub manager_monitor_interval: Duration,
 }
 
 impl Default for ServerConfig {
@@ -47,6 +56,9 @@ impl Default for ServerConfig {
             fetch_interval: Duration::from_secs(15),
             retry_delay: Duration::from_secs(2),
             proxy_socket: "/var/run/seesaw/healthcheck-proxy.sock".to_string(),
+            config_channel_size: 10,
+            proxy_channel_size: 10,
+            manager_monitor_interval: Duration::from_millis(500),
         }
     }
 }

@@ -24,12 +24,16 @@
 //! - Efficient async concurrency with tokio
 
 pub mod config;
+pub mod http_server;
 pub mod manager;
+pub mod metrics;
 pub mod notifier;
 pub mod proxy;
 pub mod server;
 pub mod types;
 
 pub use config::{Config, ConfigError};
+pub use http_server::MetricsServer;
+pub use metrics::MetricsRegistry;
 pub use server::HealthcheckServer;
 pub use types::ServerConfig;

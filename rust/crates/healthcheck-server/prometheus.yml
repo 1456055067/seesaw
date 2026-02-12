@@ -1,0 +1,60 @@
+# Prometheus configuration for healthcheck-server metrics
+# Scrapes the /metrics endpoint exposed by the Rust healthcheck server
+
+global:
+  scrape_interval: 15s      # How often to scrape targets
+  evaluation_interval: 15s  # How often to evaluate rules
+  scrape_timeout: 10s       # Timeout for scraping
+
+  external_labels:
+    cluster: 'healthcheck-dev'
+    monitor: 'healthcheck-server'
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           # - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+# rule_files:
+#   - "rules/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Healthcheck server metrics
+  - job_name: 'healthcheck-server'
+
+    # Override global scrape interval for this job
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+    # Metrics path (default is /metrics)
+    metrics_path: /metrics
+
+    # Scheme (http or https)
+    scheme: http
+
+    # Static targets
+    static_configs:
+      - targets:
+          # When running healthcheck-server on host (not in Docker)
+          - 'host.docker.internal:9090'
+
+        labels:
+          instance: 'healthcheck-server-1'
+          environment: 'development'
+
+    # Relabel configurations
+    # metric_relabel_configs:
+    #   - source_labels: [__name__]
+    #     regex: 'healthcheck_.*'
+    #     action: keep
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          instance: 'prometheus-1'

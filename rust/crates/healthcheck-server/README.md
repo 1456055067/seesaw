@@ -331,21 +331,44 @@ metrics:
 curl http://localhost:9090/metrics
 ```
 
-**Prometheus scrape configuration:**
+### Quick Start: Prometheus + Grafana Stack
 
-```yaml
-scrape_configs:
-  - job_name: 'healthcheck-server'
-    static_configs:
-      - targets: ['localhost:9090']
+Start the complete monitoring stack with Docker Compose:
+
+```bash
+cd rust/crates/healthcheck-server
+
+# Start Prometheus and Grafana
+docker-compose up -d
+
+# Access monitoring tools
+# - Prometheus UI: http://localhost:9091
+# - Grafana Dashboard: http://localhost:3000 (admin/admin)
 ```
 
-See the **[Metrics Reference Guide](../../../docs/healthcheck-server-metrics.md)** for:
+The stack includes:
+- **Prometheus**: Pre-configured to scrape healthcheck-server metrics
+- **Grafana**: Auto-provisioned with "Healthcheck Server Metrics" dashboard
+- **Persistent storage**: Volumes for data retention across restarts
+
+**Verify stack is working:**
+
+```bash
+# Run integration test
+./tests/monitoring_stack_test.sh
+```
+
+See **[MONITORING.md](./MONITORING.md)** for complete setup guide including:
+- Configuration reference
+- Troubleshooting common issues
+- Custom dashboards and alerts
+- Production deployment considerations
+
+See **[Metrics Reference Guide](../../../docs/healthcheck-server-metrics.md)** for:
 - Complete metric family list with descriptions
 - Example PromQL queries
-- Grafana dashboard setup
 - Alerting rule examples
-- Performance impact analysis
+- Performance impact analysis (< 0.01% CPU overhead)
 
 ### Log Messages
 

@@ -8,6 +8,7 @@ members = [
     "crates/vrrp-ffi",
     "crates/healthcheck",
     "crates/healthcheck-ffi",
+    "crates/healthcheck-server",
 ]
 
 [workspace.package]

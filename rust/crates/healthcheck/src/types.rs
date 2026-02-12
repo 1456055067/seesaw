@@ -92,7 +92,7 @@ impl HealthCheckResult {
 }
 
 /// Health check configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HealthCheckConfig {
     /// Target address (IP:port or hostname:port)
     pub target: String,
@@ -129,7 +129,7 @@ impl Default for HealthCheckConfig {
 }
 
 /// Health check type
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum CheckType {
     /// TCP connection check

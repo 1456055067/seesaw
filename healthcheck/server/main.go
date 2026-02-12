@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net"
 	"net/rpc"
-	"os"
 	"time"
 
 	"github.com/google/seesaw/common/ipc"
@@ -114,16 +113,10 @@ func configFetcher(conn net.Conn) {
 		// Convert to JSON-serializable format
 		configList := make([]map[string]interface{}, 0, len(configs.Configs))
 		for id, cfg := range configs.Configs {
-			configMap := map[string]interface{}{
-				"id":       uint64(id),
-				"interval": cfg.Interval.String(),
-				"timeout":  cfg.Timeout.String(),
-				// Add checker details - simplified for now
-				"checker": map[string]interface{}{
-					"type": "tcp", // Will be enhanced based on actual checker type
-				},
+			configMap := convertConfig(uint64(id), cfg)
+			if configMap != nil {
+				configList = append(configList, configMap)
 			}
-			configList = append(configList, configMap)
 		}
 
 		msg := ProxyToServerMsg{
@@ -202,6 +195,62 @@ func getHealthchecks() (*healthcheck.Checks, error) {
 	}
 
 	return &checks, nil
+}
+
+// convertConfig converts Go healthcheck.Config to Rust HealthcheckConfig format
+func convertConfig(id uint64, cfg *healthcheck.Config) map[string]interface{} {
+	if cfg == nil || cfg.Checker == nil {
+		return nil
+	}
+
+	// Format duration as humantime (e.g., "5s", "30s")
+	formatDuration := func(d time.Duration) string {
+		if d >= time.Second && d%time.Second == 0 {
+			return fmt.Sprintf("%ds", d/time.Second)
+		}
+		if d >= time.Millisecond && d%time.Millisecond == 0 {
+			return fmt.Sprintf("%dms", d/time.Millisecond)
+		}
+		return d.String()
+	}
+
+	baseConfig := map[string]interface{}{
+		"id":       id,
+		"interval": formatDuration(cfg.Interval),
+		"timeout":  formatDuration(cfg.Timeout),
+		"retries":  uint32(cfg.Retries),
+	}
+
+	// Add checker-specific fields based on checker type
+	switch checker := cfg.Checker.(type) {
+	case *healthcheck.TCPChecker:
+		baseConfig["checker_type"] = "tcp"
+		baseConfig["ip"] = checker.Target.IP.String()
+		baseConfig["port"] = uint16(checker.Target.Port)
+
+	case *healthcheck.HTTPChecker:
+		baseConfig["checker_type"] = "http"
+		baseConfig["ip"] = checker.Target.IP.String()
+		baseConfig["port"] = uint16(checker.Target.Port)
+		baseConfig["method"] = checker.Method
+		baseConfig["path"] = checker.Request
+		// Use ResponseCode field - Rust expects array of codes
+		baseConfig["expected_codes"] = []uint16{uint16(checker.ResponseCode)}
+		baseConfig["secure"] = checker.Secure
+
+	case *healthcheck.DNSChecker:
+		baseConfig["checker_type"] = "dns"
+		baseConfig["query"] = checker.Question.Name
+		// For now, use Answer field to construct expected IPs
+		// This is a simplified conversion - DNS checker in Go uses different structure
+		baseConfig["expected_ips"] = []string{checker.Answer}
+
+	default:
+		log.Warningf("Unsupported checker type for healthcheck %d: %T", id, checker)
+		return nil
+	}
+
+	return baseConfig
 }
 
 // sendBatch sends a batch of notifications to Engine

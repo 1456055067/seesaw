@@ -22,24 +22,24 @@ pub struct IpvsHandle {
 /// C-compatible service structure
 #[repr(C)]
 pub struct CService {
-    pub address: u32,      // IPv4 address in network byte order
-    pub protocol: u8,      // TCP=6, UDP=17, SCTP=132
-    pub port: u16,         // Port in network byte order
-    pub fwmark: u32,       // Firewall mark (0 if not used)
+    pub address: u32,             // IPv4 address in network byte order
+    pub protocol: u8,             // TCP=6, UDP=17, SCTP=132
+    pub port: u16,                // Port in network byte order
+    pub fwmark: u32,              // Firewall mark (0 if not used)
     pub scheduler: *const c_char, // Scheduler name (null-terminated)
-    pub flags: u32,        // Service flags
-    pub timeout: u32,      // Connection timeout
+    pub flags: u32,               // Service flags
+    pub timeout: u32,             // Connection timeout
 }
 
 /// C-compatible destination structure
 #[repr(C)]
 pub struct CDestination {
-    pub address: u32,          // IPv4 address in network byte order
-    pub port: u16,             // Port in network byte order
-    pub weight: u32,           // Weight for load balancing
-    pub fwd_method: u8,        // Forwarding method: 0=Masq, 1=Local, 2=Tunnel, 3=Route, 4=Bypass
-    pub lower_threshold: u32,  // Lower connection threshold
-    pub upper_threshold: u32,  // Upper connection threshold
+    pub address: u32,         // IPv4 address in network byte order
+    pub port: u16,            // Port in network byte order
+    pub weight: u32,          // Weight for load balancing
+    pub fwd_method: u8,       // Forwarding method: 0=Masq, 1=Local, 2=Tunnel, 3=Route, 4=Bypass
+    pub lower_threshold: u32, // Lower connection threshold
+    pub upper_threshold: u32, // Upper connection threshold
 }
 
 /// C-compatible version structure
@@ -97,10 +97,7 @@ pub unsafe extern "C" fn ipvs_destroy(handle: *mut IpvsHandle) {
 /// - handle must be a valid pointer from ipvs_new()
 /// - version must be a valid pointer to CVersion
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ipvs_version(
-    handle: *mut IpvsHandle,
-    version: *mut CVersion,
-) -> c_int {
+pub unsafe extern "C" fn ipvs_version(handle: *mut IpvsHandle, version: *mut CVersion) -> c_int {
     if handle.is_null() || version.is_null() {
         return IpvsError::NullPointer as c_int;
     }

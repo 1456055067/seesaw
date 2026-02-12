@@ -199,7 +199,11 @@ async fn test_graceful_shutdown() {
     sleep(Duration::from_millis(500)).await;
 
     let state_before = node_arc.get_state().await;
-    assert_eq!(state_before, VRRPState::Master, "Should be Master before shutdown");
+    assert_eq!(
+        state_before,
+        VRRPState::Master,
+        "Should be Master before shutdown"
+    );
 
     // Graceful shutdown
     node_arc.shutdown().await.expect("Shutdown should succeed");

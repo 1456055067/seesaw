@@ -116,10 +116,8 @@ impl VRRPNode {
 
         loop {
             // Check for incoming advertisements
-            match tokio::time::timeout(Duration::from_millis(10), async {
-                self.socket.try_recv()
-            })
-            .await
+            match tokio::time::timeout(Duration::from_millis(10), async { self.socket.try_recv() })
+                .await
             {
                 Ok(Ok(Some((packet, src_ip)))) => {
                     self.handle_advertisement_backup(&packet, src_ip, &mut deadline.clone())

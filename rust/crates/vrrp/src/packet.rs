@@ -104,7 +104,12 @@ impl VRRPPacket {
                 if offset + 4 > data.len() {
                     return Err("Truncated IPv4 address");
                 }
-                let addr = Ipv4Addr::new(data[offset], data[offset + 1], data[offset + 2], data[offset + 3]);
+                let addr = Ipv4Addr::new(
+                    data[offset],
+                    data[offset + 1],
+                    data[offset + 2],
+                    data[offset + 3],
+                );
                 ip_addresses.push(IpAddr::V4(addr));
                 offset += 4;
             }
@@ -265,7 +270,10 @@ mod tests {
 
     #[test]
     fn test_packet_serialize_parse() {
-        let ips = vec!["192.168.1.1".parse().unwrap(), "192.168.1.2".parse().unwrap()];
+        let ips = vec![
+            "192.168.1.1".parse().unwrap(),
+            "192.168.1.2".parse().unwrap(),
+        ];
         let mut packet = VRRPPacket::new(1, 100, 100, ips.clone());
 
         let src_ip: IpAddr = "10.0.0.1".parse().unwrap();

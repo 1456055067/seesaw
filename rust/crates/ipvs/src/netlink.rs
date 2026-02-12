@@ -6,14 +6,13 @@
 use bytes::BytesMut;
 use common::{Error, Result};
 use netlink_packet_core::{
-    NetlinkDeserializable, NetlinkMessage, NetlinkPayload, NetlinkSerializable,
-    NLM_F_REQUEST,
+    NLM_F_REQUEST, NetlinkDeserializable, NetlinkMessage, NetlinkPayload, NetlinkSerializable,
 };
 use netlink_packet_generic::{
-    ctrl::{nlas::GenlCtrlAttrs, GenlCtrl, GenlCtrlCmd},
     GenlMessage,
+    ctrl::{GenlCtrl, GenlCtrlCmd, nlas::GenlCtrlAttrs},
 };
-use netlink_sys::{protocols::NETLINK_GENERIC, Socket, SocketAddr};
+use netlink_sys::{Socket, SocketAddr, protocols::NETLINK_GENERIC};
 use tracing::{debug, trace};
 
 use crate::messages::IPVSMessage;

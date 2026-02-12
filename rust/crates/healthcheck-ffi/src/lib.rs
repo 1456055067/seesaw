@@ -126,9 +126,7 @@ unsafe fn parse_c_string(ptr: *const c_char) -> Result<String, Box<dyn std::erro
     if ptr.is_null() {
         return Err("null pointer".into());
     }
-    unsafe {
-        Ok(CStr::from_ptr(ptr).to_str()?.to_string())
-    }
+    unsafe { Ok(CStr::from_ptr(ptr).to_str()?.to_string()) }
 }
 
 /// Create a new health check monitor
@@ -252,9 +250,10 @@ pub extern "C" fn healthcheck_new(config: *const CHealthCheckConfig) -> *mut Hea
                     let mut ips = Vec::new();
                     for ip_ptr in ips_slice {
                         if let Ok(ip_str) = parse_c_string(*ip_ptr)
-                            && let Ok(ip) = ip_str.parse::<IpAddr>() {
-                                ips.push(ip);
-                            }
+                            && let Ok(ip) = ip_str.parse::<IpAddr>()
+                        {
+                            ips.push(ip);
+                        }
                     }
                     ips
                 } else {
@@ -355,9 +354,9 @@ pub extern "C" fn healthcheck_is_healthy(handle: *mut HealthCheckHandle) -> i32 
 
     unsafe {
         let handle = &*handle;
-        let is_healthy = handle.runtime.block_on(async {
-            handle.monitor.is_healthy().await
-        });
+        let is_healthy = handle
+            .runtime
+            .block_on(async { handle.monitor.is_healthy().await });
 
         if is_healthy { 1 } else { 0 }
     }
@@ -377,9 +376,9 @@ pub extern "C" fn healthcheck_get_stats(
 
     unsafe {
         let handle = &*handle;
-        let health_stats = handle.runtime.block_on(async {
-            handle.monitor.get_stats().await
-        });
+        let health_stats = handle
+            .runtime
+            .block_on(async { handle.monitor.get_stats().await });
 
         *stats = health_stats.into();
     }
@@ -502,9 +501,10 @@ pub extern "C" fn healthcheck_check_once(
                     let mut ips = Vec::new();
                     for ip_ptr in ips_slice {
                         if let Ok(ip_str) = parse_c_string(*ip_ptr)
-                            && let Ok(ip) = ip_str.parse::<IpAddr>() {
-                                ips.push(ip);
-                            }
+                            && let Ok(ip) = ip_str.parse::<IpAddr>()
+                        {
+                            ips.push(ip);
+                        }
                     }
                     ips
                 } else {

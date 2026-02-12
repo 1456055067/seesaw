@@ -94,7 +94,10 @@ fn test_service_lifecycle() {
     // Update service (change scheduler)
     let mut updated_service = service.clone();
     updated_service.scheduler = Scheduler::WeightedRoundRobin;
-    println!("\nUpdating service to scheduler: {}", updated_service.scheduler);
+    println!(
+        "\nUpdating service to scheduler: {}",
+        updated_service.scheduler
+    );
     manager
         .update_service(&updated_service)
         .expect("Failed to update service");
@@ -198,10 +201,14 @@ fn test_udp_service() {
     };
 
     println!("Adding UDP service on port 53...");
-    manager.add_service(&service).expect("Failed to add UDP service");
+    manager
+        .add_service(&service)
+        .expect("Failed to add UDP service");
     println!("✓ UDP service added");
 
-    manager.delete_service(&service).expect("Failed to delete service");
+    manager
+        .delete_service(&service)
+        .expect("Failed to delete service");
     println!("✓ UDP service deleted");
 }
 
@@ -224,7 +231,9 @@ fn test_multiple_destinations() {
         statistics: ServiceStats::default(),
     };
 
-    manager.add_service(&service).expect("Failed to add service");
+    manager
+        .add_service(&service)
+        .expect("Failed to add service");
     println!("✓ Service added");
 
     // Add multiple destinations
@@ -239,7 +248,10 @@ fn test_multiple_destinations() {
             statistics: DestinationStats::default(),
         };
 
-        println!("Adding destination {}: {} (weight={})", i, dest.address, dest.weight);
+        println!(
+            "Adding destination {}: {} (weight={})",
+            i, dest.address, dest.weight
+        );
         manager
             .add_destination(&service, &dest)
             .expect(&format!("Failed to add destination {}", i));
@@ -248,6 +260,8 @@ fn test_multiple_destinations() {
     println!("✓ All 3 destinations added");
 
     // Clean up
-    manager.delete_service(&service).expect("Failed to delete service");
+    manager
+        .delete_service(&service)
+        .expect("Failed to delete service");
     println!("✓ Service and all destinations deleted");
 }

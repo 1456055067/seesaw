@@ -33,13 +33,13 @@ impl fmt::Display for HealthStatus {
 pub struct HealthCheckResult {
     /// Status of the health check
     pub status: HealthStatus,
-    
+
     /// Duration of the health check
     pub duration: Duration,
-    
+
     /// Optional error message
     pub message: Option<String>,
-    
+
     /// Response code (for HTTP checks)
     pub response_code: Option<u16>,
 }
@@ -96,21 +96,21 @@ impl HealthCheckResult {
 pub struct HealthCheckConfig {
     /// Target address (IP:port or hostname:port)
     pub target: String,
-    
+
     /// Timeout for the health check
     #[serde(with = "humantime_serde")]
     pub timeout: Duration,
-    
+
     /// Interval between checks
     #[serde(with = "humantime_serde")]
     pub interval: Duration,
-    
+
     /// Number of consecutive successes required
     pub rise: u32,
-    
+
     /// Number of consecutive failures required
     pub fall: u32,
-    
+
     /// Check type
     pub check_type: CheckType,
 }
@@ -134,7 +134,7 @@ impl Default for HealthCheckConfig {
 pub enum CheckType {
     /// TCP connection check
     Tcp,
-    
+
     /// HTTP/HTTPS check
     Http {
         /// HTTP method (GET, POST, etc.)
@@ -146,10 +146,10 @@ pub enum CheckType {
         /// Use HTTPS
         https: bool,
     },
-    
+
     /// ICMP ping check
     Ping,
-    
+
     /// DNS resolution check
     Dns {
         /// Query name
@@ -164,22 +164,22 @@ pub enum CheckType {
 pub struct HealthCheckStats {
     /// Total checks performed
     pub total_checks: u64,
-    
+
     /// Successful checks
     pub successful_checks: u64,
-    
+
     /// Failed checks
     pub failed_checks: u64,
-    
+
     /// Timeout count
     pub timeouts: u64,
-    
+
     /// Average response time (milliseconds)
     pub avg_response_time_ms: f64,
-    
+
     /// Current consecutive successes
     pub consecutive_successes: u32,
-    
+
     /// Current consecutive failures
     pub consecutive_failures: u32,
 }
@@ -188,7 +188,7 @@ impl HealthCheckStats {
     /// Update stats with a check result
     pub fn update(&mut self, result: &HealthCheckResult) {
         self.total_checks += 1;
-        
+
         match result.status {
             HealthStatus::Healthy => {
                 self.successful_checks += 1;
@@ -206,10 +206,11 @@ impl HealthCheckStats {
                 self.consecutive_successes = 0;
             }
         }
-        
+
         // Update average response time
         let duration_ms = result.duration.as_millis() as f64;
         self.avg_response_time_ms = (self.avg_response_time_ms * (self.total_checks - 1) as f64
-            + duration_ms) / self.total_checks as f64;
+            + duration_ms)
+            / self.total_checks as f64;
     }
 }

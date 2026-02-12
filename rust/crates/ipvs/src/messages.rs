@@ -8,9 +8,9 @@ use crate::types::{Protocol, Service};
 use netlink_packet_core::{DecodeError, ParseableParametrized};
 use netlink_packet_generic::{GenlFamily, GenlHeader};
 use netlink_packet_utils::{
+    Parseable,
     nla::{Nla, NlaBuffer},
     parsers::{parse_u16, parse_u32},
-    Parseable,
 };
 use std::convert::TryInto;
 use std::net::IpAddr;
@@ -167,7 +167,7 @@ impl Nla for ServiceNla {
             Self::Port(_) => 2,
             Self::FirewallMark(_) => 4,
             Self::Scheduler(s) => s.len() + 1, // null-terminated
-            Self::Flags(_, _) => 8, // two u32 values
+            Self::Flags(_, _) => 8,            // two u32 values
             Self::Timeout(_) => 4,
             Self::Netmask(_) => 4,
             Self::Other(_, bytes) => bytes.len(),
@@ -227,12 +227,12 @@ impl Nla for DestNla {
 
     fn kind(&self) -> u16 {
         match self {
-            Self::Address(_) => 1,            // IPVS_DEST_ATTR_ADDR
-            Self::Port(_) => 2,               // IPVS_DEST_ATTR_PORT
-            Self::ForwardingMethod(_) => 3,  // IPVS_DEST_ATTR_FWD_METHOD
-            Self::Weight(_) => 4,             // IPVS_DEST_ATTR_WEIGHT
-            Self::UpperThreshold(_) => 5,    // IPVS_DEST_ATTR_U_THRESH
-            Self::LowerThreshold(_) => 6,    // IPVS_DEST_ATTR_L_THRESH
+            Self::Address(_) => 1,          // IPVS_DEST_ATTR_ADDR
+            Self::Port(_) => 2,             // IPVS_DEST_ATTR_PORT
+            Self::ForwardingMethod(_) => 3, // IPVS_DEST_ATTR_FWD_METHOD
+            Self::Weight(_) => 4,           // IPVS_DEST_ATTR_WEIGHT
+            Self::UpperThreshold(_) => 5,   // IPVS_DEST_ATTR_U_THRESH
+            Self::LowerThreshold(_) => 6,   // IPVS_DEST_ATTR_L_THRESH
             Self::Other(kind, _) => *kind,
         }
     }
@@ -285,13 +285,11 @@ impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>> for InfoNla {
         let payload = buf.value();
         Ok(match buf.kind() {
             x if x == IPVSInfoAttr::Version as u16 => {
-                Self::Version(parse_u32(payload)
-                    .map_err(|_| DecodeError::from("Invalid version"))?)
+                Self::Version(parse_u32(payload).map_err(|_| DecodeError::from("Invalid version"))?)
             }
-            x if x == IPVSInfoAttr::ConnTableSize as u16 => {
-                Self::ConnTableSize(parse_u32(payload)
-                    .map_err(|_| DecodeError::from("Invalid conn table size"))?)
-            }
+            x if x == IPVSInfoAttr::ConnTableSize as u16 => Self::ConnTableSize(
+                parse_u32(payload).map_err(|_| DecodeError::from("Invalid conn table size"))?,
+            ),
             kind => Self::Other(kind, payload.to_vec()),
         })
     }
@@ -304,24 +302,22 @@ impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>> for ServiceNla {
     fn parse(buf: &NlaBuffer<&'a T>) -> Result<Self, Self::Error> {
         let payload = buf.value();
         Ok(match buf.kind() {
-            x if x == IPVSServiceAttr::AddressFamily as u16 => {
-                Self::AddressFamily(parse_u16(payload)
-                    .map_err(|_| DecodeError::from("Invalid address family"))?)
-            }
-            x if x == IPVSServiceAttr::Protocol as u16 => {
-                Self::Protocol(parse_u16(payload)
-                    .map_err(|_| DecodeError::from("Invalid protocol"))?)
-            }
-            x if x == IPVSServiceAttr::Address as u16 => {
-                Self::Address(u32::from_be_bytes(
-                    payload.try_into().map_err(|_| DecodeError::from("Invalid address"))?,
-                ))
-            }
-            x if x == IPVSServiceAttr::Port as u16 => {
-                Self::Port(u16::from_be_bytes(
-                    payload.try_into().map_err(|_| DecodeError::from("Invalid port"))?,
-                ))
-            }
+            x if x == IPVSServiceAttr::AddressFamily as u16 => Self::AddressFamily(
+                parse_u16(payload).map_err(|_| DecodeError::from("Invalid address family"))?,
+            ),
+            x if x == IPVSServiceAttr::Protocol as u16 => Self::Protocol(
+                parse_u16(payload).map_err(|_| DecodeError::from("Invalid protocol"))?,
+            ),
+            x if x == IPVSServiceAttr::Address as u16 => Self::Address(u32::from_be_bytes(
+                payload
+                    .try_into()
+                    .map_err(|_| DecodeError::from("Invalid address"))?,
+            )),
+            x if x == IPVSServiceAttr::Port as u16 => Self::Port(u16::from_be_bytes(
+                payload
+                    .try_into()
+                    .map_err(|_| DecodeError::from("Invalid port"))?,
+            )),
             x if x == IPVSServiceAttr::Scheduler as u16 => {
                 let s = std::str::from_utf8(payload)
                     .map_err(|_| DecodeError::from("Invalid scheduler name"))?
@@ -481,11 +477,11 @@ impl crate::types::Destination {
 
         // Forwarding method - convert from DestinationFlags
         let fwd_method = match self.flags {
-            crate::types::DestinationFlags::Masq => 0,    // IP_VS_CONN_F_MASQ
-            crate::types::DestinationFlags::Local => 1,   // IP_VS_CONN_F_LOCALNODE
-            crate::types::DestinationFlags::Tunnel => 2,  // IP_VS_CONN_F_TUNNEL
-            crate::types::DestinationFlags::Route => 3,   // IP_VS_CONN_F_DROUTE
-            crate::types::DestinationFlags::Bypass => 4,  // IP_VS_CONN_F_BYPASS
+            crate::types::DestinationFlags::Masq => 0, // IP_VS_CONN_F_MASQ
+            crate::types::DestinationFlags::Local => 1, // IP_VS_CONN_F_LOCALNODE
+            crate::types::DestinationFlags::Tunnel => 2, // IP_VS_CONN_F_TUNNEL
+            crate::types::DestinationFlags::Route => 3, // IP_VS_CONN_F_DROUTE
+            crate::types::DestinationFlags::Bypass => 4, // IP_VS_CONN_F_BYPASS
         };
         nlas.push(DestNla::ForwardingMethod(fwd_method));
 

@@ -172,10 +172,10 @@ mod tests {
         };
 
         let monitor = HealthCheckMonitor::new(checker, config);
-        
+
         // Should start as unhealthy
         assert!(!monitor.is_healthy().await);
-        
+
         let stats = monitor.get_stats().await;
         assert_eq!(stats.total_checks, 0);
     }
@@ -198,13 +198,13 @@ mod tests {
 
         let monitor = HealthCheckMonitor::new(checker, config);
         monitor.start().await;
-        
+
         // Wait for a few checks
         sleep(Duration::from_millis(500)).await;
-        
+
         let stats = monitor.get_stats().await;
         assert!(stats.total_checks > 0);
-        
+
         monitor.stop().await;
     }
 }

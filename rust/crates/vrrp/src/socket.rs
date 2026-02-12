@@ -24,14 +24,14 @@ impl VRRPSocket {
     /// * `interface` - Network interface name (e.g., "eth0")
     /// * `is_ipv6` - Whether to use IPv6 (true) or IPv4 (false)
     pub fn new(interface: &str, is_ipv6: bool) -> io::Result<Self> {
-        let domain = if is_ipv6 {
-            Domain::IPV6
-        } else {
-            Domain::IPV4
-        };
+        let domain = if is_ipv6 { Domain::IPV6 } else { Domain::IPV4 };
 
         // Create raw socket for VRRP protocol
-        let socket = Socket::new(domain, Type::RAW, Some(Protocol::from(VRRP_PROTOCOL as i32)))?;
+        let socket = Socket::new(
+            domain,
+            Type::RAW,
+            Some(Protocol::from(VRRP_PROTOCOL as i32)),
+        )?;
 
         // Set socket options
         socket.set_nonblocking(true)?;
@@ -289,9 +289,7 @@ impl VRRPSocket {
         let (len, src_addr) = self.socket.recv_from(&mut buf)?;
 
         // Convert MaybeUninit to initialized data
-        let buf: [u8; 1500] = unsafe {
-            std::mem::transmute(buf)
-        };
+        let buf: [u8; 1500] = unsafe { std::mem::transmute(buf) };
 
         if len < 8 {
             return Err(io::Error::new(
@@ -309,7 +307,7 @@ impl VRRPSocket {
                 return Err(io::Error::new(
                     ErrorKind::InvalidData,
                     "Invalid source address",
-                ))
+                ));
             }
         };
 
@@ -339,8 +337,7 @@ impl Drop for VRRPSocket {
 fn get_interface_index(name: &str) -> io::Result<u32> {
     use std::ffi::CString;
 
-    let c_name = CString::new(name)
-        .map_err(|e| io::Error::new(ErrorKind::InvalidInput, e))?;
+    let c_name = CString::new(name).map_err(|e| io::Error::new(ErrorKind::InvalidInput, e))?;
 
     let index = unsafe { libc::if_nametoindex(c_name.as_ptr()) };
 

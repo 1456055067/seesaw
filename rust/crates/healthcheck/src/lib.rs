@@ -85,10 +85,10 @@ mod tests {
     #[test]
     fn test_stats_update() {
         let mut stats = HealthCheckStats::default();
-        
+
         let result = HealthCheckResult::healthy(std::time::Duration::from_millis(100));
         stats.update(&result);
-        
+
         assert_eq!(stats.total_checks, 1);
         assert_eq!(stats.successful_checks, 1);
         assert_eq!(stats.consecutive_successes, 1);

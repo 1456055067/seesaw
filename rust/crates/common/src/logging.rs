@@ -1,6 +1,6 @@
 //! Logging utilities for Seesaw Rust components.
 
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 /// Initialize tracing with sensible defaults.
 ///
@@ -9,10 +9,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 pub fn init() {
     tracing_subscriber::registry()
         .with(fmt::layer())
-        .with(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info")),
-        )
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
         .init();
 }
 
@@ -20,9 +17,6 @@ pub fn init() {
 pub fn init_json() {
     tracing_subscriber::registry()
         .with(fmt::layer().json())
-        .with(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info")),
-        )
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
         .init();
 }

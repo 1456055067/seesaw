@@ -4,7 +4,7 @@
 
 #![allow(unsafe_op_in_unsafe_fn)]
 
-use std::ffi::{c_char, CStr};
+use std::ffi::{CStr, c_char};
 use std::net::IpAddr;
 use std::ptr;
 use std::sync::Arc;
@@ -169,9 +169,9 @@ pub extern "C" fn vrrp_free(handle: *mut VrrpHandle) {
         let handle = unsafe { Box::from_raw(handle) };
 
         // Shutdown the node
-        let _ = handle.runtime.block_on(async {
-            handle.node.shutdown().await
-        });
+        let _ = handle
+            .runtime
+            .block_on(async { handle.node.shutdown().await });
 
         drop(handle);
     }
@@ -189,9 +189,7 @@ pub extern "C" fn vrrp_run(handle: *mut VrrpHandle) -> i32 {
 
     let handle = unsafe { &*handle };
 
-    match handle.runtime.block_on(async {
-        handle.node.run().await
-    }) {
+    match handle.runtime.block_on(async { handle.node.run().await }) {
         Ok(_) => 0,
         Err(_) => -1,
     }
@@ -217,9 +215,7 @@ pub extern "C" fn vrrp_run_async(handle: *mut VrrpHandle) -> *mut std::thread::J
             Err(_) => return -1,
         };
 
-        match runtime.block_on(async {
-            node.run().await
-        }) {
+        match runtime.block_on(async { node.run().await }) {
             Ok(_) => 0,
             Err(_) => -1,
         }
@@ -237,9 +233,9 @@ pub extern "C" fn vrrp_get_state(handle: *const VrrpHandle) -> CVrrpState {
 
     let handle = unsafe { &*handle };
 
-    let state = handle.runtime.block_on(async {
-        handle.node.get_state().await
-    });
+    let state = handle
+        .runtime
+        .block_on(async { handle.node.get_state().await });
 
     state.into()
 }
@@ -255,9 +251,9 @@ pub extern "C" fn vrrp_get_stats(handle: *const VrrpHandle, stats: *mut CVrrpSta
 
     let handle = unsafe { &*handle };
 
-    let vrrp_stats = handle.runtime.block_on(async {
-        handle.node.get_stats().await
-    });
+    let vrrp_stats = handle
+        .runtime
+        .block_on(async { handle.node.get_stats().await });
 
     unsafe {
         *stats = vrrp_stats.into();
@@ -277,9 +273,10 @@ pub extern "C" fn vrrp_shutdown(handle: *mut VrrpHandle) -> i32 {
 
     let handle = unsafe { &*handle };
 
-    match handle.runtime.block_on(async {
-        handle.node.shutdown().await
-    }) {
+    match handle
+        .runtime
+        .block_on(async { handle.node.shutdown().await })
+    {
         Ok(_) => 0,
         Err(_) => -1,
     }

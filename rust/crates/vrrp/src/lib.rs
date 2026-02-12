@@ -38,7 +38,7 @@ mod types;
 pub use packet::VRRPPacket;
 pub use socket::VRRPSocket;
 pub use state_machine::VRRPNode;
-pub use types::{VRRPConfig, VRRPState, VRRPStats, VRRP_VERSION};
+pub use types::{VRRP_VERSION, VRRPConfig, VRRPState, VRRPStats};
 
 // Phase 2.1: Protocol implementation (DONE - types, packet format, checksum)
 // Phase 2.2: Socket and multicast (DONE - raw sockets, multicast join/leave)

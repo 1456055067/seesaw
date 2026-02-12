@@ -1,8 +1,8 @@
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use healthcheck::{
-    checkers::{TcpChecker, HttpChecker, DnsChecker, HealthChecker},
+    checkers::{DnsChecker, HealthChecker, HttpChecker, TcpChecker},
     monitor::HealthCheckMonitor,
-    types::{HealthCheckConfig, CheckType},
+    types::{CheckType, HealthCheckConfig},
 };
 use std::hint::black_box;
 use std::net::SocketAddr;
@@ -20,11 +20,7 @@ fn tcp_check_benchmark(c: &mut Criterion) {
 
     group.bench_function("tcp_connection_refused", |b| {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        b.iter(|| {
-            rt.block_on(async {
-                black_box(checker.check().await)
-            })
-        });
+        b.iter(|| rt.block_on(async { black_box(checker.check().await) }));
     });
 
     group.finish();
@@ -40,16 +36,13 @@ fn http_check_benchmark(c: &mut Criterion) {
             reqwest::Method::GET,
             vec![200],
             Duration::from_millis(100),
-        ).unwrap()
+        )
+        .unwrap(),
     );
 
     group.bench_function("http_connection_error", |b| {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        b.iter(|| {
-            rt.block_on(async {
-                black_box(checker.check().await)
-            })
-        });
+        b.iter(|| rt.block_on(async { black_box(checker.check().await) }));
     });
 
     group.finish();
@@ -68,11 +61,7 @@ fn dns_check_benchmark(c: &mut Criterion) {
 
     group.bench_function("dns_localhost_resolution", |b| {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        b.iter(|| {
-            rt.block_on(async {
-                black_box(checker.check().await)
-            })
-        });
+        b.iter(|| rt.block_on(async { black_box(checker.check().await) }));
     });
 
     group.finish();
@@ -122,9 +111,7 @@ fn concurrent_checks_benchmark(c: &mut Criterion) {
                             Duration::from_millis(100),
                         ));
 
-                        handles.push(tokio::spawn(async move {
-                            checker.check().await
-                        }));
+                        handles.push(tokio::spawn(async move { checker.check().await }));
                     }
 
                     for handle in handles {
@@ -149,11 +136,7 @@ fn checker_type_comparison(c: &mut Criterion) {
 
     group.bench_function("tcp", |b| {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        b.iter(|| {
-            rt.block_on(async {
-                black_box(tcp_checker.check().await)
-            })
-        });
+        b.iter(|| rt.block_on(async { black_box(tcp_checker.check().await) }));
     });
 
     // HTTP checker
@@ -163,16 +146,13 @@ fn checker_type_comparison(c: &mut Criterion) {
             reqwest::Method::GET,
             vec![200],
             Duration::from_millis(100),
-        ).unwrap()
+        )
+        .unwrap(),
     );
 
     group.bench_function("http", |b| {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        b.iter(|| {
-            rt.block_on(async {
-                black_box(http_checker.check().await)
-            })
-        });
+        b.iter(|| rt.block_on(async { black_box(http_checker.check().await) }));
     });
 
     // DNS checker
@@ -184,11 +164,7 @@ fn checker_type_comparison(c: &mut Criterion) {
 
     group.bench_function("dns", |b| {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        b.iter(|| {
-            rt.block_on(async {
-                black_box(dns_checker.check().await)
-            })
-        });
+        b.iter(|| rt.block_on(async { black_box(dns_checker.check().await) }));
     });
 
     group.finish();

@@ -10,21 +10,21 @@ use tracing::{debug, error, info, warn};
 /// Proxy communication handler
 pub struct ProxyComm {
     socket_path: String,
-    server_tx: mpsc::Sender<ServerToProxyMsg>,
-    proxy_rx: mpsc::Receiver<ProxyToServerMsg>,
+    to_proxy_rx: mpsc::Receiver<ServerToProxyMsg>,
+    from_proxy_tx: mpsc::Sender<ProxyToServerMsg>,
 }
 
 impl ProxyComm {
     /// Create a new proxy communicator
     pub fn new(
         socket_path: String,
-        server_tx: mpsc::Sender<ServerToProxyMsg>,
-        proxy_rx: mpsc::Receiver<ProxyToServerMsg>,
+        to_proxy_rx: mpsc::Receiver<ServerToProxyMsg>,
+        from_proxy_tx: mpsc::Sender<ProxyToServerMsg>,
     ) -> Self {
         Self {
             socket_path,
-            server_tx,
-            proxy_rx,
+            to_proxy_rx,
+            from_proxy_tx,
         }
     }
 
@@ -42,8 +42,8 @@ impl ProxyComm {
         let (stream, _) = listener.accept().await?;
         info!("Go proxy connected");
 
-        // Send ready message
-        let _ = self.server_tx.send(ServerToProxyMsg::Ready).await;
+        // Send ready message to Go proxy via socket
+        // (Go proxy will receive this through the socket)
 
         // Handle communication
         self.handle_connection(stream).await?;
@@ -68,12 +68,14 @@ impl ProxyComm {
                             break;
                         }
                         Ok(_) => {
-                            // Parse message
+                            // Parse message from Go proxy
                             match serde_json::from_str::<ProxyToServerMsg>(line.trim()) {
                                 Ok(msg) => {
-                                    debug!("Received message from proxy: {:?}", msg);
-                                    // Handle message (would send to appropriate channel)
-                                    // For now, just log it
+                                    debug!("Received message from Go proxy: {:?}", msg);
+                                    // Forward to server for handling
+                                    if let Err(e) = self.from_proxy_tx.send(msg).await {
+                                        error!(error = %e, "Failed to forward message from proxy");
+                                    }
                                 }
                                 Err(e) => {
                                     warn!(error = %e, line = %line.trim(), "Failed to parse proxy message");
@@ -88,10 +90,10 @@ impl ProxyComm {
                     }
                 }
 
-                // Write to Go proxy
-                Some(msg) = self.proxy_rx.recv() => {
+                // Write to Go proxy (notifications, status, etc.)
+                Some(msg) = self.to_proxy_rx.recv() => {
                     let json = serde_json::to_string(&msg)?;
-                    debug!("Sending message to proxy: {}", json);
+                    debug!("Sending message to Go proxy: {}", json);
 
                     writer.write_all(json.as_bytes()).await?;
                     writer.write_all(b"\n").await?;

@@ -1,0 +1,37 @@
+# Development healthcheck-server configuration
+# Optimized for local development and debugging
+#
+# Features:
+# - Debug logging with text format for readability
+# - Local socket path for development
+# - Fast polling interval for quick feedback
+# - Small batches for immediate notifications
+# - Smaller channel buffers (less memory usage)
+
+server:
+  proxy_socket: "/tmp/healthcheck-proxy.sock"
+
+batching:
+  # Send notifications quickly for rapid feedback
+  delay: 50ms
+  max_size: 10
+
+channels:
+  # Smaller buffers for development
+  notification: 100
+  config_update: 5
+  proxy_message: 5
+
+manager:
+  # Fast polling for quick state detection
+  monitor_interval: 100ms
+
+advanced:
+  max_failures: 5
+  notify_interval: 5s
+  fetch_interval: 5s
+  retry_delay: 1s
+
+logging:
+  level: "debug"
+  format: "text"

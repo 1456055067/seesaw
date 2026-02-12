@@ -1,0 +1,37 @@
+# Production healthcheck-server configuration
+# Optimized for production deployments
+#
+# Features:
+# - Info level logging with JSON format for log aggregation
+# - Standard production socket path
+# - Balanced batching for efficiency without excessive latency
+# - Moderate channel buffers for reliability
+# - Standard polling interval
+
+server:
+  proxy_socket: "/var/run/seesaw/healthcheck-proxy.sock"
+
+batching:
+  # Balance between latency and efficiency
+  delay: 100ms
+  max_size: 100
+
+channels:
+  # Moderate buffers for reliable message delivery
+  notification: 1000
+  config_update: 10
+  proxy_message: 10
+
+manager:
+  # Standard polling interval
+  monitor_interval: 500ms
+
+advanced:
+  max_failures: 10
+  notify_interval: 15s
+  fetch_interval: 15s
+  retry_delay: 2s
+
+logging:
+  level: "info"
+  format: "json"

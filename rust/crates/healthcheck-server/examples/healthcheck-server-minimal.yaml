@@ -1,0 +1,29 @@
+# Minimal healthcheck-server configuration
+# Most settings use built-in defaults
+#
+# This example shows a minimal configuration that only overrides
+# a few essential settings. All other values will use the defaults.
+
+server:
+  # Override the default socket path if needed
+  proxy_socket: "/var/run/seesaw/healthcheck-proxy.sock"
+
+# Uncomment to adjust batching behavior
+# batching:
+#   delay: 100ms
+#   max_size: 100
+
+# Uncomment to tune channel buffer sizes
+# channels:
+#   notification: 1000
+#   config_update: 10
+#   proxy_message: 10
+
+# Uncomment to adjust manager polling
+# manager:
+#   monitor_interval: 500ms
+
+# Uncomment to enable debug logging
+# logging:
+#   level: "debug"
+#   format: "text"

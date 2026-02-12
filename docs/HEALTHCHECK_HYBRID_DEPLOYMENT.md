@@ -9,6 +9,9 @@ This guide explains how to build, test, and deploy the hybrid Rust+Go healthchec
 - [Building](#building)
 - [Testing](#testing)
 - [Deployment](#deployment)
+  - [Systemd Service Files](#systemd-service-files)
+  - [Installation Steps](#installation-steps)
+  - [Configuration (Optional)](#configuration-optional)
 - [Monitoring](#monitoring)
 - [Troubleshooting](#troubleshooting)
 - [Performance Validation](#performance-validation)
@@ -279,6 +282,102 @@ sudo systemctl start seesaw-healthcheck-proxy
 sudo systemctl status seesaw-healthcheck-rust
 sudo systemctl status seesaw-healthcheck-proxy
 ```
+
+### Configuration (Optional)
+
+The Rust healthcheck server supports optional YAML-based configuration. If no configuration file is provided, the server uses sensible defaults.
+
+#### Quick Start - No Configuration Needed
+
+The server works out-of-the-box with defaults:
+- Socket path: `/var/run/seesaw/healthcheck-proxy.sock`
+- Batching: 100ms delay, 100 notifications per batch
+- Polling: 500ms monitor interval
+- Logging: Info level, text format
+
+#### Creating a Configuration File
+
+To customize behavior, create a YAML configuration file:
+
+```bash
+# Create system-wide configuration
+sudo mkdir -p /etc/seesaw
+sudo tee /etc/seesaw/healthcheck-server.yaml > /dev/null <<EOF
+server:
+  proxy_socket: "/var/run/seesaw/healthcheck-proxy.sock"
+
+batching:
+  delay: 100ms
+  max_size: 100
+
+channels:
+  notification: 1000
+  config_update: 10
+  proxy_message: 10
+
+manager:
+  monitor_interval: 500ms
+
+logging:
+  level: "info"
+  format: "json"
+EOF
+```
+
+#### Configuration File Locations
+
+The server searches in priority order:
+1. `/etc/seesaw/healthcheck-server.yaml` (recommended for production)
+2. `~/.config/seesaw/healthcheck-server.yaml` (user-specific)
+3. `./healthcheck-server.yaml` (current directory)
+
+#### Example Configurations
+
+Pre-built examples are available in `rust/crates/healthcheck-server/examples/`:
+
+**Production (balanced)**:
+```bash
+sudo cp rust/crates/healthcheck-server/examples/healthcheck-server-production.yaml \
+        /etc/seesaw/healthcheck-server.yaml
+```
+
+**High-volume (500+ healthchecks)**:
+```bash
+sudo cp rust/crates/healthcheck-server/examples/healthcheck-server-high-volume.yaml \
+        /etc/seesaw/healthcheck-server.yaml
+```
+
+**Development (debug logging, fast polling)**:
+```bash
+cp rust/crates/healthcheck-server/examples/healthcheck-server-development.yaml \
+   ./healthcheck-server.yaml
+```
+
+#### Validating Configuration
+
+After creating a config file, restart the server and check logs:
+
+```bash
+# Restart server
+sudo systemctl restart seesaw-healthcheck-rust
+
+# Check for successful load
+sudo journalctl -u seesaw-healthcheck-rust -n 20 | grep -i config
+
+# Expected output:
+# "Configuration loaded successfully"
+
+# If config is invalid:
+# "Configuration error: <details>"
+# "Using default configuration"
+```
+
+#### Configuration Documentation
+
+For complete configuration reference and tuning guidelines:
+- **[Configuration Reference](healthcheck-server-config.md)** - Complete field documentation
+- **[Migration Guide](healthcheck-server-migration.md)** - Deployment migration guide
+- **[Server README](../rust/crates/healthcheck-server/README.md)** - Quick start and examples
 
 ## Monitoring
 

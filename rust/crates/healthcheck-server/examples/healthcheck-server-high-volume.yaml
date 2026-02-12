@@ -1,0 +1,41 @@
+# High-volume healthcheck-server configuration
+# Optimized for large-scale deployments with many healthchecks
+#
+# Features:
+# - Large channel buffers to prevent backpressure
+# - Large batch sizes for efficient processing
+# - Longer batch delay to accumulate more notifications
+# - Standard polling to avoid excessive CPU usage
+# - JSON logging for log aggregation systems
+#
+# Use this configuration when monitoring hundreds or thousands
+# of healthcheck targets simultaneously.
+
+server:
+  proxy_socket: "/var/run/seesaw/healthcheck-proxy.sock"
+
+batching:
+  # Accumulate more notifications before sending
+  delay: 250ms
+  # Large batches for efficiency
+  max_size: 1000
+
+channels:
+  # Large buffers to handle high message volume
+  notification: 10000
+  config_update: 100
+  proxy_message: 100
+
+manager:
+  # Standard interval (don't poll too fast with many monitors)
+  monitor_interval: 500ms
+
+advanced:
+  max_failures: 20
+  notify_interval: 30s
+  fetch_interval: 30s
+  retry_delay: 5s
+
+logging:
+  level: "info"
+  format: "json"

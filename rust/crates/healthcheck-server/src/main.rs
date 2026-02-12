@@ -26,15 +26,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cfg.telemetry.otlp_endpoint.clone(),
                 cfg.logging
                     .level
-                    .clone()
-                    .unwrap_or_else(|| "info".to_string()),
+                    .as_deref()
+                    .unwrap_or("info")
+                    .to_string(),
             )
         } else {
             (
                 false,
-                "healthcheck-server".to_string(),
-                "http://localhost:4317".to_string(),
-                "info".to_string(),
+                "healthcheck-server".into(),
+                "http://localhost:4317".into(),
+                "info".into(),
             )
         };
 

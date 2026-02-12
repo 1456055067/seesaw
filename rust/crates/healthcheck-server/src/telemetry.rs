@@ -3,13 +3,14 @@
 //! This module provides OpenTelemetry tracing capabilities for the healthcheck server,
 //! enabling distributed tracing and observability.
 
-use opentelemetry::{KeyValue, trace::TracerProvider as _};
+use opentelemetry::{trace::TracerProvider as _, KeyValue};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
-    Resource, runtime,
-    trace::{BatchConfig, RandomIdGenerator, Sampler, TracerProvider},
+    runtime,
+    trace::{RandomIdGenerator, Sampler, TracerProvider},
+    Resource,
 };
-use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 /// OpenTelemetry tracer guard
 ///

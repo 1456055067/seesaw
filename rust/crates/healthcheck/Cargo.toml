@@ -30,3 +30,8 @@ prometheus-client = "0.22"
 tokio-test = "0.4"
 tracing-subscriber.workspace = true
 mockall.workspace = true
+criterion.workspace = true
+
+[[bench]]
+name = "healthcheck_bench"
+harness = false

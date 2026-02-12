@@ -42,10 +42,7 @@ impl ProxyComm {
         let (stream, _) = listener.accept().await?;
         info!("Go proxy connected");
 
-        // Send ready message to Go proxy via socket
-        // (Go proxy will receive this through the socket)
-
-        // Handle communication
+        // Handle communication (will send Ready message as first message)
         self.handle_connection(stream).await?;
 
         Ok(())
@@ -55,6 +52,14 @@ impl ProxyComm {
     async fn handle_connection(&mut self, stream: UnixStream) -> Result<(), Box<dyn std::error::Error>> {
         let (reader, mut writer) = stream.into_split();
         let mut reader = BufReader::new(reader);
+
+        // Send Ready message to Go proxy
+        let ready_msg = crate::types::ServerToProxyMsg::Ready;
+        let json = serde_json::to_string(&ready_msg)?;
+        writer.write_all(json.as_bytes()).await?;
+        writer.write_all(b"\n").await?;
+        writer.flush().await?;
+        info!("Sent Ready message to Go proxy");
 
         let mut line = String::new();
 

@@ -43,6 +43,21 @@ pub struct ServerConfig {
 
     /// Manager monitor polling interval
     pub manager_monitor_interval: Duration,
+
+    /// Enable metrics HTTP endpoint
+    pub metrics_enabled: bool,
+
+    /// Metrics HTTP server listen address
+    pub metrics_listen_addr: String,
+
+    /// Histogram buckets for response times (in seconds)
+    pub metrics_response_time_buckets: Vec<f64>,
+
+    /// Histogram buckets for batch delay (in seconds)
+    pub metrics_batch_delay_buckets: Vec<f64>,
+
+    /// Histogram buckets for batch size
+    pub metrics_batch_size_buckets: Vec<f64>,
 }
 
 impl Default for ServerConfig {
@@ -59,6 +74,13 @@ impl Default for ServerConfig {
             config_channel_size: 10,
             proxy_channel_size: 10,
             manager_monitor_interval: Duration::from_millis(500),
+            metrics_enabled: false,
+            metrics_listen_addr: "127.0.0.1:9090".to_string(),
+            metrics_response_time_buckets: vec![
+                0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+            ],
+            metrics_batch_delay_buckets: vec![0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.5, 1.0],
+            metrics_batch_size_buckets: vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 5000.0],
         }
     }
 }

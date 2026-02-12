@@ -47,6 +47,9 @@ pub struct Config {
 
     #[serde(default)]
     pub logging: LoggingSettings,
+
+    #[serde(default)]
+    pub metrics: MetricsSettings,
 }
 
 impl Validate for Config {
@@ -55,6 +58,7 @@ impl Validate for Config {
         self.batching.validate()?;
         self.channels.validate()?;
         self.manager.validate()?;
+        self.metrics.validate()?;
         Ok(())
     }
 }
@@ -120,6 +124,26 @@ pub struct LoggingSettings {
     pub format: Option<String>,
 }
 
+/// Metrics settings
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct MetricsSettings {
+    /// Enable metrics HTTP endpoint
+    pub enabled: bool,
+
+    /// Metrics HTTP server listen address
+    #[validate(length(min = 1))]
+    pub listen_addr: String,
+
+    /// Histogram buckets for response times (in seconds)
+    pub response_time_buckets: Vec<f64>,
+
+    /// Histogram buckets for batch delay (in seconds)
+    pub batch_delay_buckets: Vec<f64>,
+
+    /// Histogram buckets for batch size
+    pub batch_size_buckets: Vec<f64>,
+}
+
 // Default implementations
 
 impl Default for ServerSettings {
@@ -177,6 +201,20 @@ impl Default for LoggingSettings {
     }
 }
 
+impl Default for MetricsSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            listen_addr: "127.0.0.1:9090".to_string(),
+            response_time_buckets: vec![
+                0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+            ],
+            batch_delay_buckets: vec![0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.5, 1.0],
+            batch_size_buckets: vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 5000.0],
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -186,6 +224,7 @@ impl Default for Config {
             manager: ManagerSettings::default(),
             advanced: AdvancedSettings::default(),
             logging: LoggingSettings::default(),
+            metrics: MetricsSettings::default(),
         }
     }
 }
@@ -282,6 +321,11 @@ impl Config {
             config_channel_size: self.channels.config_update,
             proxy_channel_size: self.channels.proxy_message,
             manager_monitor_interval: self.manager.monitor_interval,
+            metrics_enabled: self.metrics.enabled,
+            metrics_listen_addr: self.metrics.listen_addr.clone(),
+            metrics_response_time_buckets: self.metrics.response_time_buckets.clone(),
+            metrics_batch_delay_buckets: self.metrics.batch_delay_buckets.clone(),
+            metrics_batch_size_buckets: self.metrics.batch_size_buckets.clone(),
         }
     }
 }

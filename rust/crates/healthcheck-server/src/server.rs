@@ -1,9 +1,12 @@
 //! Main healthcheck server implementation.
 
+use crate::http_server::MetricsServer;
 use crate::manager::Manager;
+use crate::metrics::MetricsRegistry;
 use crate::notifier::Notifier;
 use crate::proxy::ProxyComm;
 use crate::types::{HealthcheckConfig, Notification, ProxyToServerMsg, ServerConfig, ServerToProxyMsg};
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
@@ -28,19 +31,55 @@ impl HealthcheckServer {
         let (to_proxy_tx, to_proxy_rx) = mpsc::channel::<ServerToProxyMsg>(self.config.channel_size);
         let (from_proxy_tx, from_proxy_rx) = mpsc::channel::<ProxyToServerMsg>(self.config.proxy_channel_size);
 
-        // Create components
-        let manager = Manager::new(notify_tx, config_rx, self.config.manager_monitor_interval);
+        // Create metrics registry (optional)
+        let metrics = if self.config.metrics_enabled {
+            let registry = Arc::new(MetricsRegistry::new(
+                &self.config.metrics_response_time_buckets,
+                &self.config.metrics_batch_delay_buckets,
+                &self.config.metrics_batch_size_buckets,
+            ));
+            info!("Metrics enabled on {}", self.config.metrics_listen_addr);
+            Some(registry)
+        } else {
+            info!("Metrics disabled");
+            None
+        };
+
+        // Create components (pass metrics to each)
+        let manager = Manager::new(
+            notify_tx,
+            config_rx,
+            self.config.manager_monitor_interval,
+            metrics.clone(),
+        );
         let notifier = Notifier::new(
             notify_rx,
             to_proxy_tx.clone(),
             self.config.batch_delay,
             self.config.batch_size,
+            metrics.clone(),
         );
         let proxy = ProxyComm::new(
             self.config.proxy_socket.clone(),
             to_proxy_rx,
             from_proxy_tx,
+            metrics.clone(),
         );
+
+        // Spawn HTTP metrics server (if enabled)
+        let metrics_handle = if let Some(ref registry) = metrics {
+            let server = MetricsServer::new(
+                registry.clone(),
+                self.config.metrics_listen_addr.clone(),
+            );
+            Some(tokio::spawn(async move {
+                if let Err(e) = server.run().await {
+                    warn!(error = %e, "Metrics server error");
+                }
+            }))
+        } else {
+            None
+        };
 
         // Spawn proxy task
         let proxy_handle = tokio::spawn(async move {
@@ -79,6 +118,17 @@ impl HealthcheckServer {
             }
             _ = notifier_handle => {
                 info!("Notifier task completed");
+            }
+            _ = async {
+                if let Some(handle) = metrics_handle {
+                    handle.await
+                } else {
+                    // Never completes if metrics disabled
+                    std::future::pending::<()>().await;
+                    Ok(())
+                }
+            } => {
+                info!("Metrics server completed");
             }
         }
 

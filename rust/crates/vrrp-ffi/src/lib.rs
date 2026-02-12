@@ -143,7 +143,7 @@ pub extern "C" fn vrrp_new(config: *const CVrrpConfig) -> *mut VrrpHandle {
     };
 
     // Validate config
-    if let Err(_) = vrrp_config.validate() {
+    if vrrp_config.validate().is_err() {
         return ptr::null_mut();
     }
 

@@ -4,7 +4,7 @@
 //! netlink communication with the IPVS kernel module.
 
 use crate::commands::{IPVSCommand, IPVSInfoAttr, IPVSServiceAttr};
-use crate::types::{Destination, Protocol, Scheduler, Service};
+use crate::types::{Protocol, Service};
 use netlink_packet_core::{DecodeError, ParseableParametrized};
 use netlink_packet_generic::{GenlFamily, GenlHeader};
 use netlink_packet_utils::{
@@ -337,7 +337,7 @@ impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>> for ServiceNla {
 // Implement Emitable from netlink-packet-core for IPVSMessage
 impl netlink_packet_core::Emitable for IPVSMessage {
     fn buffer_len(&self) -> usize {
-        self.nlas.iter().map(|nla| UtilsEmitable::buffer_len(nla)).sum()
+        self.nlas.iter().map(UtilsEmitable::buffer_len).sum()
     }
 
     fn emit(&self, buffer: &mut [u8]) {

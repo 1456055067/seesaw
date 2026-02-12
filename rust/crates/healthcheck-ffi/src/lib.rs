@@ -251,11 +251,10 @@ pub extern "C" fn healthcheck_new(config: *const CHealthCheckConfig) -> *mut Hea
 
                     let mut ips = Vec::new();
                     for ip_ptr in ips_slice {
-                        if let Ok(ip_str) = parse_c_string(*ip_ptr) {
-                            if let Ok(ip) = ip_str.parse::<IpAddr>() {
+                        if let Ok(ip_str) = parse_c_string(*ip_ptr)
+                            && let Ok(ip) = ip_str.parse::<IpAddr>() {
                                 ips.push(ip);
                             }
-                        }
                     }
                     ips
                 } else {
@@ -502,11 +501,10 @@ pub extern "C" fn healthcheck_check_once(
 
                     let mut ips = Vec::new();
                     for ip_ptr in ips_slice {
-                        if let Ok(ip_str) = parse_c_string(*ip_ptr) {
-                            if let Ok(ip) = ip_str.parse::<IpAddr>() {
+                        if let Ok(ip_str) = parse_c_string(*ip_ptr)
+                            && let Ok(ip) = ip_str.parse::<IpAddr>() {
                                 ips.push(ip);
                             }
-                        }
                     }
                     ips
                 } else {

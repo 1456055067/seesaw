@@ -44,7 +44,7 @@ async fn test_manager_adds_new_healthchecks() {
     let (config_tx, config_rx) = mpsc::channel::<Vec<HealthcheckConfig>>(10);
 
     // Create and spawn manager
-    let manager = Manager::new(notify_tx, config_rx, Duration::from_millis(500));
+    let manager = Manager::new(notify_tx, config_rx, Duration::from_millis(500), None);
     let manager_handle = tokio::spawn(async move {
         manager.run().await;
     });
@@ -81,7 +81,7 @@ async fn test_manager_removes_deleted_healthchecks() {
     let (notify_tx, _notify_rx) = mpsc::channel::<Notification>(100);
     let (config_tx, config_rx) = mpsc::channel::<Vec<HealthcheckConfig>>(10);
 
-    let manager = Manager::new(notify_tx, config_rx, Duration::from_millis(500));
+    let manager = Manager::new(notify_tx, config_rx, Duration::from_millis(500), None);
     let manager_handle = tokio::spawn(async move {
         manager.run().await;
     });
@@ -115,7 +115,7 @@ async fn test_manager_updates_existing_healthchecks() {
     let (notify_tx, _notify_rx) = mpsc::channel::<Notification>(100);
     let (config_tx, config_rx) = mpsc::channel::<Vec<HealthcheckConfig>>(10);
 
-    let manager = Manager::new(notify_tx, config_rx, Duration::from_millis(500));
+    let manager = Manager::new(notify_tx, config_rx, Duration::from_millis(500), None);
     let manager_handle = tokio::spawn(async move {
         manager.run().await;
     });
@@ -144,7 +144,7 @@ async fn test_manager_handles_mixed_checker_types() {
     let (notify_tx, mut notify_rx) = mpsc::channel::<Notification>(100);
     let (config_tx, config_rx) = mpsc::channel::<Vec<HealthcheckConfig>>(10);
 
-    let manager = Manager::new(notify_tx, config_rx, Duration::from_millis(500));
+    let manager = Manager::new(notify_tx, config_rx, Duration::from_millis(500), None);
     let manager_handle = tokio::spawn(async move {
         manager.run().await;
     });
@@ -195,7 +195,7 @@ async fn test_manager_status_snapshot() {
     let (notify_tx, _notify_rx) = mpsc::channel::<Notification>(100);
     let (config_tx, config_rx) = mpsc::channel::<Vec<HealthcheckConfig>>(10);
 
-    let manager = Manager::new(notify_tx, config_rx, Duration::from_millis(500));
+    let manager = Manager::new(notify_tx, config_rx, Duration::from_millis(500), None);
 
     // Add some healthchecks
     let configs = vec![
@@ -224,7 +224,7 @@ async fn test_manager_handles_empty_config_updates() {
     let (notify_tx, _notify_rx) = mpsc::channel::<Notification>(100);
     let (config_tx, config_rx) = mpsc::channel::<Vec<HealthcheckConfig>>(10);
 
-    let manager = Manager::new(notify_tx, config_rx, Duration::from_millis(500));
+    let manager = Manager::new(notify_tx, config_rx, Duration::from_millis(500), None);
     let manager_handle = tokio::spawn(async move {
         manager.run().await;
     });

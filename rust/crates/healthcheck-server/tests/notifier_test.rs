@@ -31,6 +31,7 @@ async fn test_notifier_batches_notifications() {
         proxy_tx,
         Duration::from_millis(10),
         5,
+        None,
     );
 
     tokio::spawn(async move {
@@ -67,6 +68,7 @@ async fn test_notifier_sends_full_batch_immediately() {
         proxy_tx,
         Duration::from_secs(1),  // Long delay
         3,                        // Small batch size
+        None,
     );
 
     tokio::spawn(async move {
@@ -102,6 +104,7 @@ async fn test_notifier_handles_multiple_batches() {
         proxy_tx,
         Duration::from_millis(20),
         3,
+        None,
     );
 
     tokio::spawn(async move {
@@ -153,6 +156,7 @@ async fn test_notifier_preserves_notification_order() {
         proxy_tx,
         Duration::from_millis(10),
         10,
+        None,
     );
 
     tokio::spawn(async move {
@@ -192,6 +196,7 @@ async fn test_notifier_handles_rapid_notifications() {
         proxy_tx,
         Duration::from_millis(5),
         50,
+        None,
     );
 
     tokio::spawn(async move {
@@ -231,6 +236,7 @@ async fn test_notifier_with_mixed_states() {
         proxy_tx,
         Duration::from_millis(10),
         10,
+        None,
     );
 
     tokio::spawn(async move {

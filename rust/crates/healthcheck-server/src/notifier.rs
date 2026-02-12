@@ -1,6 +1,8 @@
 //! Notifier for batching and sending healthcheck notifications.
 
+use crate::metrics::MetricsRegistry;
 use crate::types::{Notification, NotificationBatch, ServerToProxyMsg};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::{interval, Instant};
@@ -19,6 +21,9 @@ pub struct Notifier {
 
     /// Maximum batch size
     batch_size: usize,
+
+    /// Metrics registry (optional)
+    metrics: Option<Arc<MetricsRegistry>>,
 }
 
 impl Notifier {
@@ -28,12 +33,14 @@ impl Notifier {
         proxy_tx: mpsc::Sender<ServerToProxyMsg>,
         batch_delay: Duration,
         batch_size: usize,
+        metrics: Option<Arc<MetricsRegistry>>,
     ) -> Self {
         Self {
             notify_rx,
             proxy_tx,
             batch_delay,
             batch_size,
+            metrics,
         }
     }
 
@@ -52,11 +59,18 @@ impl Notifier {
                 // Receive notification
                 Some(notification) = self.notify_rx.recv() => {
                     debug!(id = notification.id, state = ?notification.status.state, "Received notification");
+
+                    // Record notification received
+                    if let Some(ref m) = self.metrics {
+                        m.record_notification_batched();
+                    }
+
                     batch.push(notification);
 
                     // Send batch if it reaches max size
                     if batch.len() >= self.batch_size {
-                        self.send_batch(&mut batch).await;
+                        let delay = last_batch_time.elapsed();
+                        self.send_batch(&mut batch, "size_limit", delay).await;
                         last_batch_time = Instant::now();
                         batch_timer.reset();
                     }
@@ -66,7 +80,8 @@ impl Notifier {
                 _ = batch_timer.tick() => {
                     // Only send if we have notifications and delay has passed
                     if !batch.is_empty() && last_batch_time.elapsed() >= self.batch_delay {
-                        self.send_batch(&mut batch).await;
+                        let delay = last_batch_time.elapsed();
+                        self.send_batch(&mut batch, "time_delay", delay).await;
                         last_batch_time = Instant::now();
                     }
                 }
@@ -75,12 +90,17 @@ impl Notifier {
     }
 
     /// Send a batch of notifications
-    async fn send_batch(&self, batch: &mut Vec<Notification>) {
+    async fn send_batch(&self, batch: &mut Vec<Notification>, trigger: &str, delay: Duration) {
         if batch.is_empty() {
             return;
         }
 
         info!("Sending notification batch with {} items", batch.len());
+
+        // Record batch metrics
+        if let Some(ref m) = self.metrics {
+            m.record_batch_sent(batch.len(), trigger, delay);
+        }
 
         let msg = ServerToProxyMsg::NotificationBatch {
             batch: NotificationBatch {

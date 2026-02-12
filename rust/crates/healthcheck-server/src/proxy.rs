@@ -1,7 +1,9 @@
 //! Proxy communication layer for Go<->Rust messages.
 
+use crate::metrics::MetricsRegistry;
 use crate::types::{ProxyToServerMsg, ServerToProxyMsg};
 use std::path::Path;
+use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::mpsc;
@@ -12,6 +14,7 @@ pub struct ProxyComm {
     socket_path: String,
     to_proxy_rx: mpsc::Receiver<ServerToProxyMsg>,
     from_proxy_tx: mpsc::Sender<ProxyToServerMsg>,
+    metrics: Option<Arc<MetricsRegistry>>,
 }
 
 impl ProxyComm {
@@ -20,11 +23,13 @@ impl ProxyComm {
         socket_path: String,
         to_proxy_rx: mpsc::Receiver<ServerToProxyMsg>,
         from_proxy_tx: mpsc::Sender<ProxyToServerMsg>,
+        metrics: Option<Arc<MetricsRegistry>>,
     ) -> Self {
         Self {
             socket_path,
             to_proxy_rx,
             from_proxy_tx,
+            metrics,
         }
     }
 
@@ -42,10 +47,20 @@ impl ProxyComm {
         let (stream, _) = listener.accept().await?;
         info!("Go proxy connected");
 
-        // Handle communication (will send Ready message as first message)
-        self.handle_connection(stream).await?;
+        // Record proxy connection
+        if let Some(ref m) = self.metrics {
+            m.set_proxy_connected(true);
+        }
 
-        Ok(())
+        // Handle communication (will send Ready message as first message)
+        let result = self.handle_connection(stream).await;
+
+        // Record proxy disconnection
+        if let Some(ref m) = self.metrics {
+            m.set_proxy_connected(false);
+        }
+
+        result
     }
 
     /// Handle a single connection
@@ -84,12 +99,18 @@ impl ProxyComm {
                                 }
                                 Err(e) => {
                                     warn!(error = %e, line = %line.trim(), "Failed to parse proxy message");
+                                    if let Some(ref m) = self.metrics {
+                                        m.record_error("parse");
+                                    }
                                 }
                             }
                             line.clear();
                         }
                         Err(e) => {
                             error!(error = %e, "Failed to read from proxy");
+                            if let Some(ref m) = self.metrics {
+                                m.record_error("socket_io");
+                            }
                             break;
                         }
                     }

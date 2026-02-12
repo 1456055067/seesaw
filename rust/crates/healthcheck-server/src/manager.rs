@@ -1,6 +1,7 @@
 //! Manager for healthcheck monitor lifecycle.
 
-use crate::types::{HealthcheckConfig, HealthcheckId, Notification, State, Status};
+use crate::metrics::MetricsRegistry;
+use crate::types::{HealthcheckConfig, HealthcheckId, Notification, State, Status, CheckerConfig};
 use dashmap::DashMap;
 use healthcheck::{
     checkers::{DnsChecker, HealthChecker, HttpChecker, TcpChecker},
@@ -25,6 +26,9 @@ pub struct Manager {
 
     /// Monitor polling interval
     monitor_interval: Duration,
+
+    /// Metrics registry (optional)
+    metrics: Option<Arc<MetricsRegistry>>,
 }
 
 /// State for a single monitor
@@ -43,12 +47,14 @@ impl Manager {
         notify_tx: mpsc::Sender<Notification>,
         config_rx: mpsc::Receiver<Vec<HealthcheckConfig>>,
         monitor_interval: Duration,
+        metrics: Option<Arc<MetricsRegistry>>,
     ) -> Self {
         Self {
             monitors: Arc::new(DashMap::new()),
             notify_tx,
             config_rx,
             monitor_interval,
+            metrics,
         }
     }
 
@@ -60,8 +66,9 @@ impl Manager {
         let monitors_clone = self.monitors.clone();
         let notify_tx_clone = self.notify_tx.clone();
         let monitor_interval = self.monitor_interval;
+        let metrics_clone = self.metrics.clone();
         tokio::spawn(async move {
-            Self::monitor_task(monitors_clone, notify_tx_clone, monitor_interval).await;
+            Self::monitor_task(monitors_clone, notify_tx_clone, monitor_interval, metrics_clone).await;
         });
 
         // Handle configuration updates
@@ -88,6 +95,11 @@ impl Manager {
                 true
             }
         });
+
+        // Update monitor count after removals
+        if let Some(ref m) = self.metrics {
+            m.update_monitor_count(self.monitors.len());
+        }
 
         // Add or update healthchecks
         for config in configs {
@@ -129,6 +141,11 @@ impl Manager {
                     }
                 }
             }
+        }
+
+        // Update monitor count after additions
+        if let Some(ref m) = self.metrics {
+            m.update_monitor_count(self.monitors.len());
         }
     }
 
@@ -179,11 +196,18 @@ impl Manager {
         monitors: Arc<DashMap<HealthcheckId, MonitorState>>,
         notify_tx: mpsc::Sender<Notification>,
         monitor_interval: Duration,
+        metrics: Option<Arc<MetricsRegistry>>,
     ) {
         let mut interval = tokio::time::interval(monitor_interval);
 
         loop {
+            let start = std::time::Instant::now();
             interval.tick().await;
+
+            // Update active monitor count
+            if let Some(ref m) = metrics {
+                m.update_monitor_count(monitors.len());
+            }
 
             // Check all monitors
             for mut entry in monitors.iter_mut() {
@@ -192,6 +216,31 @@ impl Manager {
                 // Get current health status
                 let is_healthy = state.monitor.is_healthy().await;
                 let stats = state.monitor.get_stats().await;
+
+                // Determine checker type for metrics
+                let checker_type = match &state.config.checker {
+                    CheckerConfig::Tcp { .. } => "tcp",
+                    CheckerConfig::Http { .. } => "http",
+                    CheckerConfig::Dns { .. } => "dns",
+                };
+
+                // Record check metrics (detect new checks by comparing counts)
+                if let Some(ref m) = metrics {
+                    let new_successes = stats.successful_checks;
+                    let new_failures = stats.failed_checks;
+                    let response_time = Duration::from_millis(stats.avg_response_time_ms as u64);
+
+                    if new_successes > state.successes {
+                        m.record_check(*id, checker_type, "success", response_time);
+                    }
+                    if new_failures > state.failures {
+                        m.record_check(*id, checker_type, "failure", response_time);
+                    }
+
+                    // Update state and consecutive count gauges
+                    m.update_state(*id, checker_type, is_healthy);
+                    m.update_consecutive(*id, checker_type, stats.consecutive_successes as u64, stats.consecutive_failures as u64);
+                }
 
                 // Update counts
                 state.successes = stats.successful_checks;
@@ -212,6 +261,11 @@ impl Manager {
                         new_state = ?new_state,
                         "Health state changed"
                     );
+
+                    // Record state transition metric
+                    if let Some(ref m) = metrics {
+                        m.record_state_transition(*id, checker_type, state.last_state, new_state);
+                    }
 
                     let notification = Notification {
                         id: *id,
@@ -235,6 +289,11 @@ impl Manager {
 
                     state.last_state = new_state;
                 }
+            }
+
+            // Record monitor task duration
+            if let Some(ref m) = metrics {
+                m.record_monitor_task_duration(start.elapsed());
             }
         }
     }

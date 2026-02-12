@@ -36,7 +36,7 @@ async fn test_proxy_sends_ready_message() {
     let (from_proxy_tx, _from_proxy_rx) = mpsc::channel::<ProxyToServerMsg>(10);
 
     // Start proxy
-    let proxy = ProxyComm::new(socket_path.clone(), to_proxy_rx, from_proxy_tx);
+    let proxy = ProxyComm::new(socket_path.clone(), to_proxy_rx, from_proxy_tx, None);
     tokio::spawn(async move {
         let _ = proxy.run().await;
     });
@@ -83,7 +83,7 @@ async fn test_proxy_receives_config_updates() {
     let (from_proxy_tx, mut from_proxy_rx) = mpsc::channel::<ProxyToServerMsg>(10);
 
     // Start proxy
-    let proxy = ProxyComm::new(socket_path.clone(), to_proxy_rx, from_proxy_tx);
+    let proxy = ProxyComm::new(socket_path.clone(), to_proxy_rx, from_proxy_tx, None);
     tokio::spawn(async move {
         let _ = proxy.run().await;
     });
@@ -134,7 +134,7 @@ async fn test_proxy_sends_notifications() {
     let (from_proxy_tx, _from_proxy_rx) = mpsc::channel::<ProxyToServerMsg>(10);
 
     // Start proxy
-    let proxy = ProxyComm::new(socket_path.clone(), to_proxy_rx, from_proxy_tx);
+    let proxy = ProxyComm::new(socket_path.clone(), to_proxy_rx, from_proxy_tx, None);
     tokio::spawn(async move {
         let _ = proxy.run().await;
     });
@@ -203,7 +203,7 @@ async fn test_proxy_handles_shutdown() {
     let (from_proxy_tx, mut from_proxy_rx) = mpsc::channel::<ProxyToServerMsg>(10);
 
     // Start proxy
-    let proxy = ProxyComm::new(socket_path.clone(), to_proxy_rx, from_proxy_tx);
+    let proxy = ProxyComm::new(socket_path.clone(), to_proxy_rx, from_proxy_tx, None);
     tokio::spawn(async move {
         let _ = proxy.run().await;
     });

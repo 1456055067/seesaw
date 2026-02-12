@@ -89,8 +89,9 @@ impl HealthcheckServer {
         });
 
         // Spawn message handler task (handles messages from Go proxy)
+        let metrics_clone2 = metrics.clone();
         let message_handler_handle = tokio::spawn(async move {
-            Self::handle_proxy_messages(from_proxy_rx, config_tx).await;
+            Self::handle_proxy_messages(from_proxy_rx, config_tx, metrics_clone2).await;
         });
 
         // Spawn manager task
@@ -140,11 +141,18 @@ impl HealthcheckServer {
     async fn handle_proxy_messages(
         mut from_proxy_rx: mpsc::Receiver<ProxyToServerMsg>,
         config_tx: mpsc::Sender<Vec<HealthcheckConfig>>,
+        metrics: Option<Arc<MetricsRegistry>>,
     ) {
         while let Some(msg) = from_proxy_rx.recv().await {
             match msg {
                 ProxyToServerMsg::UpdateConfigs { configs } => {
                     info!("Received {} healthcheck configs from proxy", configs.len());
+
+                    // Record config update metric
+                    if let Some(ref m) = metrics {
+                        m.record_config_update();
+                    }
+
                     if let Err(e) = config_tx.send(configs).await {
                         warn!(error = %e, "Failed to send configs to manager");
                     }

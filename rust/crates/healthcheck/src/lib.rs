@@ -57,9 +57,10 @@ pub use types::{CheckType, HealthCheckConfig, HealthCheckResult, HealthCheckStat
 
 // Phase 3.1: Core health checkers (DONE - TCP, HTTP, DNS)
 // Phase 3.2: Monitor and state management (DONE - rise/fall, stats)
-// Phase 3.3: FFI bridge (DONE - healthcheck-ffi crate)
+// Phase 3.3: FFI bridge (DONE - healthcheck-ffi crate + one-shot API)
 // Phase 3.4: Go integration (DONE - rust bindings package)
-// Phase 3.5: Testing and benchmarks (TODO)
+// Phase 3.5: Testing and benchmarks (DONE - criterion + comparative analysis)
+// Phase 3.6: Seesaw integration (DONE - adapter checkers)
 
 #[cfg(test)]
 mod tests {

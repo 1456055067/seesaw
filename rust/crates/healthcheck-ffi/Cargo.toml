@@ -1,0 +1,25 @@
+[package]
+name = "healthcheck-ffi"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+healthcheck = { path = "../healthcheck" }
+tokio.workspace = true
+tracing.workspace = true
+
+# FFI helpers
+libc = "0.2"
+
+# Re-export types from healthcheck dependencies
+reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+
+[build-dependencies]
+cbindgen = "0.28"

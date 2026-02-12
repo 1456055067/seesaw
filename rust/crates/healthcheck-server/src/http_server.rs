@@ -2,11 +2,11 @@
 
 use crate::metrics::MetricsRegistry;
 use axum::{
+    Router,
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
-    Router,
 };
 use prometheus_client::encoding::text::encode;
 use std::sync::Arc;

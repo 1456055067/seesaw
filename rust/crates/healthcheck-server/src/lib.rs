@@ -37,5 +37,5 @@ pub use config::{Config, ConfigError};
 pub use http_server::MetricsServer;
 pub use metrics::MetricsRegistry;
 pub use server::HealthcheckServer;
-pub use telemetry::{init_telemetry, init_telemetry_http, setup_tracing_with_otel, TelemetryGuard};
+pub use telemetry::{TelemetryGuard, init_telemetry, init_telemetry_http, setup_tracing_with_otel};
 pub use types::ServerConfig;

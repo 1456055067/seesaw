@@ -238,7 +238,9 @@ impl Default for MetricsSettings {
                 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
             ],
             batch_delay_buckets: vec![0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.5, 1.0],
-            batch_size_buckets: vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 5000.0],
+            batch_size_buckets: vec![
+                1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 5000.0,
+            ],
         }
     }
 }
@@ -329,9 +331,7 @@ impl Config {
 
     /// Find configuration file in standard locations
     fn find_config_file() -> Option<PathBuf> {
-        let mut paths = vec![
-            PathBuf::from("/etc/seesaw/healthcheck-server.yaml"),
-        ];
+        let mut paths = vec![PathBuf::from("/etc/seesaw/healthcheck-server.yaml")];
 
         if let Some(home_path) = Self::home_config_path() {
             paths.push(home_path);
@@ -339,7 +339,8 @@ impl Config {
 
         paths.push(PathBuf::from("./healthcheck-server.yaml"));
 
-        paths.into_iter()
+        paths
+            .into_iter()
             .find(|p: &PathBuf| p.exists() && p.is_file())
     }
 
@@ -516,7 +517,10 @@ manager:
         assert_eq!(server_config.channel_size, 1000);
         assert_eq!(server_config.config_channel_size, 10);
         assert_eq!(server_config.proxy_channel_size, 10);
-        assert_eq!(server_config.manager_monitor_interval, Duration::from_millis(500));
+        assert_eq!(
+            server_config.manager_monitor_interval,
+            Duration::from_millis(500)
+        );
     }
 
     #[test]

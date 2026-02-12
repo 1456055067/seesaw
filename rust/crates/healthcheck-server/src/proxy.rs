@@ -64,7 +64,10 @@ impl ProxyComm {
     }
 
     /// Handle a single connection
-    async fn handle_connection(&mut self, stream: UnixStream) -> Result<(), Box<dyn std::error::Error>> {
+    async fn handle_connection(
+        &mut self,
+        stream: UnixStream,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let (reader, mut writer) = stream.into_split();
         let mut reader = BufReader::new(reader);
 

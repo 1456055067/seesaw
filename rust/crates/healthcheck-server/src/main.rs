@@ -1,6 +1,6 @@
 //! Seesaw Healthcheck Server binary
 
-use healthcheck_server::{setup_tracing_with_otel, Config, HealthcheckServer};
+use healthcheck_server::{Config, HealthcheckServer, setup_tracing_with_otel};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -18,26 +18,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Get telemetry settings
-    let (telemetry_enabled, service_name, otlp_endpoint, log_level) = if let Some(ref cfg) = yaml_config
-    {
-        (
-            cfg.telemetry.enabled,
-            cfg.telemetry.service_name.clone(),
-            cfg.telemetry.otlp_endpoint.clone(),
-            cfg.logging.level.clone().unwrap_or_else(|| "info".to_string()),
-        )
-    } else {
-        (false, "healthcheck-server".to_string(), "http://localhost:4317".to_string(), "info".to_string())
-    };
+    let (telemetry_enabled, service_name, otlp_endpoint, log_level) =
+        if let Some(ref cfg) = yaml_config {
+            (
+                cfg.telemetry.enabled,
+                cfg.telemetry.service_name.clone(),
+                cfg.telemetry.otlp_endpoint.clone(),
+                cfg.logging
+                    .level
+                    .clone()
+                    .unwrap_or_else(|| "info".to_string()),
+            )
+        } else {
+            (
+                false,
+                "healthcheck-server".to_string(),
+                "http://localhost:4317".to_string(),
+                "info".to_string(),
+            )
+        };
 
     // Initialize tracing with OpenTelemetry (if enabled)
-    let _telemetry_guard = setup_tracing_with_otel(
-        &service_name,
-        &otlp_endpoint,
-        telemetry_enabled,
-        &log_level,
-    )
-    .await?;
+    let _telemetry_guard =
+        setup_tracing_with_otel(&service_name, &otlp_endpoint, telemetry_enabled, &log_level)
+            .await?;
 
     tracing::info!("Seesaw Healthcheck Server starting");
 

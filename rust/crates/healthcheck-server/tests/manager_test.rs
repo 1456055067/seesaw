@@ -1,7 +1,7 @@
 //! Integration tests for Manager component
 
-use healthcheck_server::types::{CheckerConfig, HealthcheckConfig, Notification, State};
 use healthcheck_server::manager::Manager;
+use healthcheck_server::types::{CheckerConfig, HealthcheckConfig, Notification, State};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -183,7 +183,11 @@ async fn test_manager_handles_mixed_checker_types() {
     }
 
     // Should have received notifications from all three checkers
-    assert!(received >= 1, "Expected at least 1 notification, got {}", received);
+    assert!(
+        received >= 1,
+        "Expected at least 1 notification, got {}",
+        received
+    );
 
     drop(config_tx);
     drop(notify_rx);

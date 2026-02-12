@@ -26,13 +26,7 @@ async fn test_notifier_batches_notifications() {
     let (proxy_tx, mut proxy_rx) = mpsc::channel::<ServerToProxyMsg>(100);
 
     // Create notifier with 10ms delay and batch size of 5
-    let notifier = Notifier::new(
-        notify_rx,
-        proxy_tx,
-        Duration::from_millis(10),
-        5,
-        None,
-    );
+    let notifier = Notifier::new(notify_rx, proxy_tx, Duration::from_millis(10), 5, None);
 
     tokio::spawn(async move {
         notifier.run().await;
@@ -40,7 +34,10 @@ async fn test_notifier_batches_notifications() {
 
     // Send 3 notifications quickly (should batch)
     for i in 1..=3 {
-        notify_tx.send(notification(i, State::Healthy)).await.unwrap();
+        notify_tx
+            .send(notification(i, State::Healthy))
+            .await
+            .unwrap();
     }
 
     // Should receive a batch after delay
@@ -51,7 +48,11 @@ async fn test_notifier_batches_notifications() {
 
     match msg {
         ServerToProxyMsg::NotificationBatch { batch } => {
-            assert_eq!(batch.notifications.len(), 3, "Should batch all 3 notifications");
+            assert_eq!(
+                batch.notifications.len(),
+                3,
+                "Should batch all 3 notifications"
+            );
         }
         _ => panic!("Expected NotificationBatch, got {:?}", msg),
     }
@@ -66,8 +67,8 @@ async fn test_notifier_sends_full_batch_immediately() {
     let notifier = Notifier::new(
         notify_rx,
         proxy_tx,
-        Duration::from_secs(1),  // Long delay
-        3,                        // Small batch size
+        Duration::from_secs(1), // Long delay
+        3,                      // Small batch size
         None,
     );
 
@@ -77,7 +78,10 @@ async fn test_notifier_sends_full_batch_immediately() {
 
     // Send exactly batch_size notifications
     for i in 1..=3 {
-        notify_tx.send(notification(i, State::Healthy)).await.unwrap();
+        notify_tx
+            .send(notification(i, State::Healthy))
+            .await
+            .unwrap();
     }
 
     // Should receive batch immediately (before delay expires)
@@ -99,13 +103,7 @@ async fn test_notifier_handles_multiple_batches() {
     let (notify_tx, notify_rx) = mpsc::channel::<Notification>(100);
     let (proxy_tx, mut proxy_rx) = mpsc::channel::<ServerToProxyMsg>(100);
 
-    let notifier = Notifier::new(
-        notify_rx,
-        proxy_tx,
-        Duration::from_millis(20),
-        3,
-        None,
-    );
+    let notifier = Notifier::new(notify_rx, proxy_tx, Duration::from_millis(20), 3, None);
 
     tokio::spawn(async move {
         notifier.run().await;
@@ -113,7 +111,10 @@ async fn test_notifier_handles_multiple_batches() {
 
     // Send first batch worth
     for i in 1..=3 {
-        notify_tx.send(notification(i, State::Healthy)).await.unwrap();
+        notify_tx
+            .send(notification(i, State::Healthy))
+            .await
+            .unwrap();
     }
 
     // Receive first batch
@@ -124,7 +125,10 @@ async fn test_notifier_handles_multiple_batches() {
 
     // Send second batch worth
     for i in 4..=6 {
-        notify_tx.send(notification(i, State::Unhealthy)).await.unwrap();
+        notify_tx
+            .send(notification(i, State::Unhealthy))
+            .await
+            .unwrap();
     }
 
     // Receive second batch
@@ -151,13 +155,7 @@ async fn test_notifier_preserves_notification_order() {
     let (notify_tx, notify_rx) = mpsc::channel::<Notification>(100);
     let (proxy_tx, mut proxy_rx) = mpsc::channel::<ServerToProxyMsg>(100);
 
-    let notifier = Notifier::new(
-        notify_rx,
-        proxy_tx,
-        Duration::from_millis(10),
-        10,
-        None,
-    );
+    let notifier = Notifier::new(notify_rx, proxy_tx, Duration::from_millis(10), 10, None);
 
     tokio::spawn(async move {
         notifier.run().await;
@@ -166,7 +164,10 @@ async fn test_notifier_preserves_notification_order() {
     // Send notifications with specific IDs
     let ids = vec![5, 3, 7, 1, 9];
     for &id in &ids {
-        notify_tx.send(notification(id, State::Healthy)).await.unwrap();
+        notify_tx
+            .send(notification(id, State::Healthy))
+            .await
+            .unwrap();
     }
 
     // Receive batch
@@ -177,9 +178,7 @@ async fn test_notifier_preserves_notification_order() {
 
     match msg {
         ServerToProxyMsg::NotificationBatch { batch } => {
-            let received_ids: Vec<u64> = batch.notifications.iter()
-                .map(|n| n.id)
-                .collect();
+            let received_ids: Vec<u64> = batch.notifications.iter().map(|n| n.id).collect();
             assert_eq!(received_ids, ids, "Notification order should be preserved");
         }
         _ => panic!("Expected NotificationBatch"),
@@ -191,13 +190,7 @@ async fn test_notifier_handles_rapid_notifications() {
     let (notify_tx, notify_rx) = mpsc::channel::<Notification>(1000);
     let (proxy_tx, mut proxy_rx) = mpsc::channel::<ServerToProxyMsg>(100);
 
-    let notifier = Notifier::new(
-        notify_rx,
-        proxy_tx,
-        Duration::from_millis(5),
-        50,
-        None,
-    );
+    let notifier = Notifier::new(notify_rx, proxy_tx, Duration::from_millis(5), 50, None);
 
     tokio::spawn(async move {
         notifier.run().await;
@@ -205,7 +198,10 @@ async fn test_notifier_handles_rapid_notifications() {
 
     // Send 100 notifications rapidly
     for i in 1..=100 {
-        notify_tx.send(notification(i, State::Healthy)).await.unwrap();
+        notify_tx
+            .send(notification(i, State::Healthy))
+            .await
+            .unwrap();
     }
 
     // Collect all batches
@@ -231,23 +227,29 @@ async fn test_notifier_with_mixed_states() {
     let (notify_tx, notify_rx) = mpsc::channel::<Notification>(100);
     let (proxy_tx, mut proxy_rx) = mpsc::channel::<ServerToProxyMsg>(100);
 
-    let notifier = Notifier::new(
-        notify_rx,
-        proxy_tx,
-        Duration::from_millis(10),
-        10,
-        None,
-    );
+    let notifier = Notifier::new(notify_rx, proxy_tx, Duration::from_millis(10), 10, None);
 
     tokio::spawn(async move {
         notifier.run().await;
     });
 
     // Send notifications with different states
-    notify_tx.send(notification(1, State::Healthy)).await.unwrap();
-    notify_tx.send(notification(2, State::Unhealthy)).await.unwrap();
-    notify_tx.send(notification(3, State::Unknown)).await.unwrap();
-    notify_tx.send(notification(4, State::Healthy)).await.unwrap();
+    notify_tx
+        .send(notification(1, State::Healthy))
+        .await
+        .unwrap();
+    notify_tx
+        .send(notification(2, State::Unhealthy))
+        .await
+        .unwrap();
+    notify_tx
+        .send(notification(3, State::Unknown))
+        .await
+        .unwrap();
+    notify_tx
+        .send(notification(4, State::Healthy))
+        .await
+        .unwrap();
 
     // Receive batch
     let msg = tokio::time::timeout(Duration::from_millis(50), proxy_rx.recv())

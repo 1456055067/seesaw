@@ -94,8 +94,12 @@ impl Default for ServerConfig {
             metrics_response_time_buckets: vec![
                 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
             ],
-            metrics_batch_delay_buckets: vec![0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.5, 1.0],
-            metrics_batch_size_buckets: vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 5000.0],
+            metrics_batch_delay_buckets: vec![
+                0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.5, 1.0,
+            ],
+            metrics_batch_size_buckets: vec![
+                1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 5000.0,
+            ],
             telemetry_enabled: false,
             telemetry_service_name: "healthcheck-server".to_string(),
             telemetry_otlp_endpoint: "http://localhost:4317".to_string(),
@@ -160,7 +164,9 @@ pub enum ServerToProxyMsg {
     NotificationBatch { batch: NotificationBatch },
 
     /// Response to status request
-    StatusResponse { statuses: Vec<(HealthcheckId, Status)> },
+    StatusResponse {
+        statuses: Vec<(HealthcheckId, Status)>,
+    },
 
     /// Server ready
     Ready,
@@ -216,8 +222,8 @@ impl HealthcheckConfig {
                 target: format!("{}:{}", ip, port),
                 timeout: self.timeout,
                 interval: self.interval,
-                rise: (self.retries + 1).max(2),  // Convert retries to rise
-                fall: (self.retries + 1).max(2),  // Convert retries to fall
+                rise: (self.retries + 1).max(2), // Convert retries to rise
+                fall: (self.retries + 1).max(2), // Convert retries to fall
                 check_type: CheckType::Tcp,
             },
             CheckerConfig::Http {
@@ -244,7 +250,7 @@ impl HealthcheckConfig {
                 query,
                 expected_ips,
             } => HealthCheckConfig {
-                target: "0.0.0.0:53".to_string(),  // Placeholder
+                target: "0.0.0.0:53".to_string(), // Placeholder
                 timeout: self.timeout,
                 interval: self.interval,
                 rise: (self.retries + 1).max(2),

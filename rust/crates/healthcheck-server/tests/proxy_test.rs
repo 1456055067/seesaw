@@ -61,8 +61,8 @@ async fn test_proxy_sends_ready_message() {
 
     assert!(bytes_read > 0, "Should receive Ready message");
 
-    let msg: ServerToProxyMsg = serde_json::from_str(line.trim())
-        .expect("Failed to parse Ready message");
+    let msg: ServerToProxyMsg =
+        serde_json::from_str(line.trim()).expect("Failed to parse Ready message");
 
     match msg {
         ServerToProxyMsg::Ready => {
@@ -180,8 +180,8 @@ async fn test_proxy_sends_notifications() {
 
     assert!(bytes_read > 0);
 
-    let received: ServerToProxyMsg = serde_json::from_str(line.trim())
-        .expect("Failed to parse notification");
+    let received: ServerToProxyMsg =
+        serde_json::from_str(line.trim()).expect("Failed to parse notification");
 
     match received {
         ServerToProxyMsg::NotificationBatch { batch } => {
@@ -249,11 +249,15 @@ async fn test_proxy_json_serialization() {
 
     // UpdateConfigs
     let configs = vec![tcp_config(1)];
-    let msg = ProxyToServerMsg::UpdateConfigs { configs: configs.clone() };
+    let msg = ProxyToServerMsg::UpdateConfigs {
+        configs: configs.clone(),
+    };
     let json = serde_json::to_string(&msg).unwrap();
     let parsed: ProxyToServerMsg = serde_json::from_str(&json).unwrap();
     match parsed {
-        ProxyToServerMsg::UpdateConfigs { configs: parsed_configs } => {
+        ProxyToServerMsg::UpdateConfigs {
+            configs: parsed_configs,
+        } => {
             assert_eq!(parsed_configs.len(), 1);
             assert_eq!(parsed_configs[0].id, 1);
         }

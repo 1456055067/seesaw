@@ -5,7 +5,7 @@ use prometheus_client::encoding::EncodeLabelSet;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
-use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
+use prometheus_client::metrics::histogram::{Histogram, exponential_buckets};
 use prometheus_client::registry::Registry;
 use std::time::Duration;
 
@@ -136,10 +136,11 @@ impl MetricsRegistry {
 
         // For now, use exponential buckets to avoid closure type complexity
         // Custom buckets will be handled in Phase 6.2 when integrating with config
-        let response_time_seconds = Family::<HealthcheckLabels, Histogram>::new_with_constructor(|| {
-            // Exponential buckets from 1ms to ~10s
-            Histogram::new(exponential_buckets(0.001, 2.0, 14))
-        });
+        let response_time_seconds =
+            Family::<HealthcheckLabels, Histogram>::new_with_constructor(|| {
+                // Exponential buckets from 1ms to ~10s
+                Histogram::new(exponential_buckets(0.001, 2.0, 14))
+            });
         registry.register(
             "healthcheck_response_time_seconds",
             "Health check response time in seconds",
@@ -276,13 +277,7 @@ impl MetricsRegistry {
     }
 
     /// Record a health check result
-    pub fn record_check(
-        &self,
-        id: u64,
-        checker_type: &str,
-        result: &str,
-        response_time: Duration,
-    ) {
+    pub fn record_check(&self, id: u64, checker_type: &str, result: &str, response_time: Duration) {
         // Increment check counter
         self.checks_total
             .get_or_create(&CheckLabels {
@@ -314,13 +309,7 @@ impl MetricsRegistry {
     }
 
     /// Update consecutive success/failure counts
-    pub fn update_consecutive(
-        &self,
-        id: u64,
-        checker_type: &str,
-        successes: u64,
-        failures: u64,
-    ) {
+    pub fn update_consecutive(&self, id: u64, checker_type: &str, successes: u64, failures: u64) {
         let labels = HealthcheckLabels {
             id: id.to_string(),
             checker_type: checker_type.to_string(),

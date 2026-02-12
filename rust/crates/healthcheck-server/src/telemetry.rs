@@ -3,17 +3,13 @@
 //! This module provides OpenTelemetry tracing capabilities for the healthcheck server,
 //! enabling distributed tracing and observability.
 
-use opentelemetry::{
-    trace::TracerProvider as _,
-    KeyValue,
-};
+use opentelemetry::{KeyValue, trace::TracerProvider as _};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
-    runtime,
+    Resource, runtime,
     trace::{BatchConfig, RandomIdGenerator, Sampler, TracerProvider},
-    Resource,
 };
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
+use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 /// OpenTelemetry tracer guard
 ///
@@ -154,10 +150,7 @@ pub async fn setup_tracing_with_otel(
 
         // Setup tracing subscriber with both stdout and OpenTelemetry
         tracing_subscriber::registry()
-            .with(
-                EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| EnvFilter::new(log_level)),
-            )
+            .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level)))
             .with(tracing_subscriber::fmt::layer())
             .with(telemetry_layer)
             .init();
@@ -166,10 +159,7 @@ pub async fn setup_tracing_with_otel(
     } else {
         // Just stdout logging
         tracing_subscriber::registry()
-            .with(
-                EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| EnvFilter::new(log_level)),
-            )
+            .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level)))
             .with(tracing_subscriber::fmt::layer())
             .init();
 

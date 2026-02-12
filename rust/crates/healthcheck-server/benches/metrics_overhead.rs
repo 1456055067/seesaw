@@ -1,7 +1,7 @@
 // Benchmark to measure metrics overhead
 // Compare performance with metrics enabled vs disabled
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use healthcheck_server::metrics::MetricsRegistry;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,7 +15,12 @@ fn bench_metrics_recording(c: &mut Criterion) {
         b.iter(|| {
             // Simulate typical metric recording pattern from manager.rs
             if let Some(ref m) = metrics {
-                m.record_check(black_box(1), black_box("tcp"), black_box("success"), black_box(Duration::from_millis(10)));
+                m.record_check(
+                    black_box(1),
+                    black_box("tcp"),
+                    black_box("success"),
+                    black_box(Duration::from_millis(10)),
+                );
                 m.update_state(black_box(1), black_box("tcp"), black_box(true));
                 m.update_consecutive(black_box(1), black_box("tcp"), black_box(5), black_box(0));
             }
@@ -32,7 +37,12 @@ fn bench_metrics_recording(c: &mut Criterion) {
 
         b.iter(|| {
             if let Some(ref m) = metrics {
-                m.record_check(black_box(1), black_box("tcp"), black_box("success"), black_box(Duration::from_millis(10)));
+                m.record_check(
+                    black_box(1),
+                    black_box("tcp"),
+                    black_box("success"),
+                    black_box(Duration::from_millis(10)),
+                );
                 m.update_state(black_box(1), black_box("tcp"), black_box(true));
                 m.update_consecutive(black_box(1), black_box("tcp"), black_box(5), black_box(0));
             }

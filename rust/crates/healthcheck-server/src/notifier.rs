@@ -5,7 +5,7 @@ use crate::types::{Notification, NotificationBatch, ServerToProxyMsg};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tokio::time::{interval, Instant};
+use tokio::time::{Instant, interval};
 use tracing::{debug, info, warn};
 
 /// Notifier batches notifications and sends them to the proxy

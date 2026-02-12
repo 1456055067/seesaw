@@ -5,7 +5,9 @@ use crate::manager::Manager;
 use crate::metrics::MetricsRegistry;
 use crate::notifier::Notifier;
 use crate::proxy::ProxyComm;
-use crate::types::{HealthcheckConfig, Notification, ProxyToServerMsg, ServerConfig, ServerToProxyMsg};
+use crate::types::{
+    HealthcheckConfig, Notification, ProxyToServerMsg, ServerConfig, ServerToProxyMsg,
+};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{info, warn};
@@ -27,9 +29,12 @@ impl HealthcheckServer {
 
         // Create channels
         let (notify_tx, notify_rx) = mpsc::channel::<Notification>(self.config.channel_size);
-        let (config_tx, config_rx) = mpsc::channel::<Vec<HealthcheckConfig>>(self.config.config_channel_size);
-        let (to_proxy_tx, to_proxy_rx) = mpsc::channel::<ServerToProxyMsg>(self.config.channel_size);
-        let (from_proxy_tx, from_proxy_rx) = mpsc::channel::<ProxyToServerMsg>(self.config.proxy_channel_size);
+        let (config_tx, config_rx) =
+            mpsc::channel::<Vec<HealthcheckConfig>>(self.config.config_channel_size);
+        let (to_proxy_tx, to_proxy_rx) =
+            mpsc::channel::<ServerToProxyMsg>(self.config.channel_size);
+        let (from_proxy_tx, from_proxy_rx) =
+            mpsc::channel::<ProxyToServerMsg>(self.config.proxy_channel_size);
 
         // Create metrics registry (optional)
         let metrics = if self.config.metrics_enabled {
@@ -68,10 +73,8 @@ impl HealthcheckServer {
 
         // Spawn HTTP metrics server (if enabled)
         let metrics_handle = if let Some(ref registry) = metrics {
-            let server = MetricsServer::new(
-                registry.clone(),
-                self.config.metrics_listen_addr.clone(),
-            );
+            let server =
+                MetricsServer::new(registry.clone(), self.config.metrics_listen_addr.clone());
             Some(tokio::spawn(async move {
                 if let Err(e) = server.run().await {
                     warn!(error = %e, "Metrics server error");

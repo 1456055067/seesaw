@@ -1,7 +1,7 @@
 //! Manager for healthcheck monitor lifecycle.
 
 use crate::metrics::MetricsRegistry;
-use crate::types::{HealthcheckConfig, HealthcheckId, Notification, State, Status, CheckerConfig};
+use crate::types::{CheckerConfig, HealthcheckConfig, HealthcheckId, Notification, State, Status};
 use dashmap::DashMap;
 use healthcheck::{
     checkers::{DnsChecker, HealthChecker, HttpChecker, TcpChecker},
@@ -68,7 +68,13 @@ impl Manager {
         let monitor_interval = self.monitor_interval;
         let metrics_clone = self.metrics.clone();
         tokio::spawn(async move {
-            Self::monitor_task(monitors_clone, notify_tx_clone, monitor_interval, metrics_clone).await;
+            Self::monitor_task(
+                monitors_clone,
+                notify_tx_clone,
+                monitor_interval,
+                metrics_clone,
+            )
+            .await;
         });
 
         // Handle configuration updates
@@ -118,7 +124,7 @@ impl Manager {
                     }
                 }
             } else {
-                    let id = config.id;
+                let id = config.id;
 
                 // Create new monitor
                 if let Some(monitor) = Self::create_monitor(&config) {
@@ -177,15 +183,18 @@ impl Manager {
                     _ => reqwest::Method::GET,
                 };
 
-                HttpChecker::new(url, req_method, expected_codes.clone(), config.timeout).ok().map(Arc::new)?
+                HttpChecker::new(url, req_method, expected_codes.clone(), config.timeout)
+                    .ok()
+                    .map(Arc::new)?
             }
-            crate::types::CheckerConfig::Dns { query, expected_ips } => {
-                Arc::new(DnsChecker::new(
-                    query.clone(),
-                    expected_ips.clone(),
-                    config.timeout,
-                ))
-            }
+            crate::types::CheckerConfig::Dns {
+                query,
+                expected_ips,
+            } => Arc::new(DnsChecker::new(
+                query.clone(),
+                expected_ips.clone(),
+                config.timeout,
+            )),
         };
 
         Some(HealthCheckMonitor::new(checker, monitor_config))
@@ -239,7 +248,12 @@ impl Manager {
 
                     // Update state and consecutive count gauges
                     m.update_state(*id, checker_type, is_healthy);
-                    m.update_consecutive(*id, checker_type, stats.consecutive_successes as u64, stats.consecutive_failures as u64);
+                    m.update_consecutive(
+                        *id,
+                        checker_type,
+                        stats.consecutive_successes as u64,
+                        stats.consecutive_failures as u64,
+                    );
                 }
 
                 // Update counts
@@ -277,8 +291,7 @@ impl Manager {
                             state: new_state,
                             message: format!(
                                 "{}/{} checks successful",
-                                stats.successful_checks,
-                                stats.total_checks
+                                stats.successful_checks, stats.total_checks
                             ),
                         },
                     };
@@ -314,8 +327,7 @@ impl Manager {
                 state: state.last_state,
                 message: format!(
                     "{}/{} checks successful",
-                    stats.successful_checks,
-                    stats.total_checks
+                    stats.successful_checks, stats.total_checks
                 ),
             };
 

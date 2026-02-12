@@ -107,7 +107,7 @@ impl HealthChecker for HttpChecker {
                 let status_code = response.status().as_u16();
 
                 if self.expected_codes.is_empty() || self.expected_codes.contains(&status_code) {
-                    debug!(url = %self.url, status = status_code, duration_ms = duration.as_millis(), 
+                    debug!(url = %self.url, status = status_code, duration_ms = duration.as_millis(),
                            "HTTP check successful");
                     let mut result = HealthCheckResult::healthy(duration);
                     result.response_code = Some(status_code);

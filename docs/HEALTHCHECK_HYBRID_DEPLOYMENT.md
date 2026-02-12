@@ -443,6 +443,179 @@ INFO Engine returned 10 healthchecks
 INFO Sent 10 healthcheck configs to Rust server
 ```
 
+### Prometheus Metrics (Optional)
+
+The Rust healthcheck server can expose comprehensive Prometheus metrics for production monitoring.
+
+#### Enable Metrics
+
+Add to `/etc/seesaw/healthcheck-server.yaml`:
+
+```yaml
+metrics:
+  enabled: true
+  listen_addr: "0.0.0.0:9090"
+```
+
+Restart the service:
+
+```bash
+sudo systemctl restart seesaw-healthcheck-rust
+```
+
+#### Verify Metrics Endpoint
+
+```bash
+# Test metrics endpoint
+curl http://localhost:9090/metrics
+
+# Sample output:
+# healthcheck_checks_total{id="1",type="tcp",result="success"} 142
+# healthcheck_response_time_seconds_bucket{id="1",type="tcp",le="0.01"} 120
+# healthcheck_monitors_active 10
+# healthcheck_proxy_connected 1
+```
+
+#### Configure Prometheus
+
+Add scrape configuration to Prometheus (`prometheus.yml`):
+
+```yaml
+scrape_configs:
+  - job_name: 'seesaw-healthcheck'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 15s
+```
+
+Reload Prometheus:
+
+```bash
+# Send SIGHUP to reload config
+sudo kill -HUP $(pgrep prometheus)
+
+# Or restart service
+sudo systemctl reload prometheus
+```
+
+#### Verify Prometheus Scraping
+
+1. Open Prometheus UI: `http://prometheus-server:9090`
+2. Navigate to **Status → Targets**
+3. Verify `seesaw-healthcheck` target shows **UP**
+
+#### Import Grafana Dashboard
+
+1. Open Grafana
+2. Navigate to **Dashboards → Import**
+3. Upload file: `/path/to/seesaw/docs/healthcheck-server-grafana-dashboard.json`
+4. Select Prometheus data source
+5. Click **Import**
+
+#### Example Alert Rules
+
+Create `/etc/prometheus/rules/seesaw-healthcheck.yml`:
+
+```yaml
+groups:
+  - name: seesaw_healthcheck
+    interval: 30s
+    rules:
+      # Alert on proxy disconnect
+      - alert: HealthcheckProxyDisconnected
+        expr: healthcheck_proxy_connected == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Healthcheck server proxy disconnected"
+
+      # Alert on low success rate
+      - alert: HealthcheckLowSuccessRate
+        expr: |
+          (
+            rate(healthcheck_checks_total{result="success"}[5m])
+            /
+            rate(healthcheck_checks_total[5m])
+          ) < 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Healthcheck {{ $labels.id }} has low success rate"
+
+      # Alert on flapping
+      - alert: HealthcheckFlapping
+        expr: |
+          sum by (id) (
+            rate(healthcheck_state_transitions_total[5m])
+          ) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Healthcheck {{ $labels.id }} is flapping"
+```
+
+Reference Prometheus rules in `prometheus.yml`:
+
+```yaml
+rule_files:
+  - "/etc/prometheus/rules/seesaw-healthcheck.yml"
+```
+
+#### Key Metrics to Monitor
+
+**Healthcheck Performance:**
+- `healthcheck_checks_total` - Success/failure counts
+- `healthcheck_response_time_seconds` - Response time distribution
+- `healthcheck_state` - Current health state (0=unknown, 1=healthy, 2=unhealthy)
+
+**System Health:**
+- `healthcheck_monitors_active` - Number of active monitors
+- `healthcheck_proxy_connected` - Proxy connection status
+- `healthcheck_batch_size` - Notification batch sizes
+
+**Errors:**
+- `healthcheck_errors_total` - Error counts by type
+- `healthcheck_state_transitions_total` - State change frequency (detect flapping)
+
+**Example PromQL Queries:**
+
+```promql
+# Overall success rate
+rate(healthcheck_checks_total{result="success"}[5m])
+  /
+rate(healthcheck_checks_total[5m])
+
+# P95 response time
+histogram_quantile(0.95,
+  rate(healthcheck_response_time_seconds_bucket[5m])
+)
+
+# Unhealthy target count
+count(healthcheck_state == 2)
+
+# Average batch size
+rate(healthcheck_batch_size_sum[5m])
+  /
+rate(healthcheck_batch_size_count[5m])
+```
+
+#### Performance Impact
+
+- **CPU**: < 1% overhead when enabled
+- **Memory**: ~500 KB for typical deployment
+- **Network**: ~5-10 KB per scrape (every 15-60s)
+
+#### Complete Documentation
+
+See **[Metrics Reference Guide](healthcheck-server-metrics.md)** for:
+- Complete metric family list
+- Grafana dashboard panels
+- Alert rule examples
+- Troubleshooting guide
+
 ## Troubleshooting
 
 ### Rust Server Won't Start

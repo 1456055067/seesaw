@@ -128,6 +128,64 @@ manager:
   - **Purpose**: Balance between responsiveness and CPU usage
   - **Examples**: `100ms` (development/testing), `1s` (resource-constrained)
 
+### Metrics Settings
+
+Controls Prometheus metrics exposition and monitoring.
+
+```yaml
+metrics:
+  enabled: true
+  listen_addr: "0.0.0.0:9090"
+  response_time_buckets: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0]
+  batch_delay_buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1.0]
+  batch_size_buckets: [1, 10, 50, 100, 500, 1000, 5000]
+```
+
+**Fields:**
+
+- `enabled` (boolean): Enable Prometheus metrics HTTP endpoint
+  - **Default**: `false` (opt-in)
+  - **Purpose**: Expose metrics for monitoring and alerting
+  - **Production**: Set to `true` for observability
+
+- `listen_addr` (string): HTTP server listen address for metrics endpoint
+  - **Default**: `127.0.0.1:9090`
+  - **Validation**: Must be non-empty, format `host:port`
+  - **Examples**:
+    - `0.0.0.0:9090` - Listen on all interfaces (production)
+    - `127.0.0.1:9090` - Localhost only (development)
+    - `10.0.1.5:9090` - Specific interface
+
+- `response_time_buckets` (list of floats): Histogram buckets for healthcheck response times (in seconds)
+  - **Default**: `[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]`
+  - **Purpose**: Define response time histogram buckets for percentile calculations
+  - **Tuning**: Adjust based on expected response time ranges
+  - **Examples**:
+    - `[0.001, 0.01, 0.1, 1.0]` - Coarse buckets
+    - `[0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1]` - Fine-grained for fast checks
+
+- `batch_delay_buckets` (list of floats): Histogram buckets for batch delays (in seconds)
+  - **Default**: `[0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.5, 1.0]`
+  - **Purpose**: Track actual batch delay distribution
+  - **Tuning**: Align with configured `batching.delay` value
+
+- `batch_size_buckets` (list of floats): Histogram buckets for batch sizes (notification count)
+  - **Default**: `[1, 5, 10, 25, 50, 100, 250, 500, 1000, 5000]`
+  - **Purpose**: Track notification batch size distribution
+  - **Tuning**: Align with configured `batching.max_size` value
+  - **High-volume**: Use `[1, 10, 50, 100, 250, 500, 1000, 2500, 5000, 10000]`
+
+**Performance Impact:**
+
+- **CPU**: < 1% when enabled (atomic operations, lock-free)
+- **Memory**: ~500 KB for typical deployment (100 healthchecks)
+- **Network**: ~5-10 KB per Prometheus scrape (15-60s interval)
+
+**See Also:**
+
+- [Metrics Reference Guide](healthcheck-server-metrics.md) - Complete metrics documentation
+- [Prometheus Documentation](https://prometheus.io/docs/) - Prometheus project docs
+
 ### Advanced Settings
 
 Advanced tuning parameters that rarely need adjustment.

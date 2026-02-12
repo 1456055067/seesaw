@@ -26,6 +26,11 @@ manager:
   # Fast polling for quick state detection
   monitor_interval: 100ms
 
+metrics:
+  # Enable metrics for local development
+  enabled: true
+  listen_addr: "127.0.0.1:9090"
+
 advanced:
   max_failures: 5
   notify_interval: 5s

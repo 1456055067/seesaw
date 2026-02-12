@@ -26,6 +26,12 @@ manager:
   # Standard polling interval
   monitor_interval: 500ms
 
+metrics:
+  # Enable Prometheus metrics endpoint
+  enabled: true
+  listen_addr: "0.0.0.0:9090"
+  # Default histogram buckets are suitable for production
+
 advanced:
   max_failures: 10
   notify_interval: 15s

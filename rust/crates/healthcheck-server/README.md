@@ -307,13 +307,45 @@ CMD ["/usr/local/bin/healthcheck-server"]
 
 ## Monitoring
 
-### Key Metrics
+### Prometheus Metrics
 
-- Notification batch size
-- Notification latency
-- Channel buffer depth
-- Monitor count
-- State transition rate
+The healthcheck server exposes comprehensive Prometheus metrics for production monitoring:
+
+**Enable metrics in configuration:**
+
+```yaml
+metrics:
+  enabled: true
+  listen_addr: "0.0.0.0:9090"
+```
+
+**Key metric families:**
+
+- **Per-healthcheck metrics**: Check success/failure rates, response times, state transitions
+- **System-wide metrics**: Active monitors, batch processing, notification rates
+- **Resource metrics**: Channel depths, task durations, error rates
+
+**Access metrics endpoint:**
+
+```bash
+curl http://localhost:9090/metrics
+```
+
+**Prometheus scrape configuration:**
+
+```yaml
+scrape_configs:
+  - job_name: 'healthcheck-server'
+    static_configs:
+      - targets: ['localhost:9090']
+```
+
+See the **[Metrics Reference Guide](../../../docs/healthcheck-server-metrics.md)** for:
+- Complete metric family list with descriptions
+- Example PromQL queries
+- Grafana dashboard setup
+- Alerting rule examples
+- Performance impact analysis
 
 ### Log Messages
 
@@ -381,4 +413,5 @@ See [CONTRIBUTING.md](../../../CONTRIBUTING.md) for development guidelines.
 - [Healthcheck Library](../healthcheck/README.md) - Core healthcheck implementation
 - [Deployment Guide](../../../docs/HEALTHCHECK_HYBRID_DEPLOYMENT.md) - Complete deployment instructions
 - [Configuration Reference](../../../docs/healthcheck-server-config.md) - Detailed configuration documentation
+- [Metrics Reference](../../../docs/healthcheck-server-metrics.md) - Prometheus metrics guide
 - [Migration Guide](../../../docs/healthcheck-server-migration.md) - Migration guide for existing deployments

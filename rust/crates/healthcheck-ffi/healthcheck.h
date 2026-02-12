@@ -7,6 +7,16 @@
 #include <stdlib.h>
 
 /**
+ * C-compatible health status
+ */
+typedef enum CHealthStatus {
+  Healthy = 0,
+  Unhealthy = 1,
+  Timeout = 2,
+  Error = 3,
+} CHealthStatus;
+
+/**
  * Opaque handle to a health check monitor
  */
 typedef struct HealthCheckHandle HealthCheckHandle;
@@ -87,6 +97,15 @@ typedef struct CHealthCheckStats {
 } CHealthCheckStats;
 
 /**
+ * C-compatible health check result for one-shot checks
+ */
+typedef struct CHealthCheckResult {
+  enum CHealthStatus status;
+  uint64_t duration_ms;
+  uint16_t response_code;
+} CHealthCheckResult;
+
+/**
  * Create a new health check monitor
  *
  * Returns NULL on error. Use healthcheck_free to clean up.
@@ -125,6 +144,14 @@ int32_t healthcheck_is_healthy(struct HealthCheckHandle *handle);
  * Returns 0 on success, -1 on error
  */
 int32_t healthcheck_get_stats(struct HealthCheckHandle *handle, struct CHealthCheckStats *stats);
+
+/**
+ * Perform a one-shot health check (without monitor)
+ *
+ * This is more efficient for single checks. Returns 0 on success, -1 on error.
+ */
+int32_t healthcheck_check_once(const struct CHealthCheckConfig *config,
+                               struct CHealthCheckResult *result);
 
 /**
  * Get last error message

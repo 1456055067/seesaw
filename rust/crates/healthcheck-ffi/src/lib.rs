@@ -388,6 +388,154 @@ pub extern "C" fn healthcheck_get_stats(
     0
 }
 
+/// C-compatible health check result for one-shot checks
+#[repr(C)]
+pub struct CHealthCheckResult {
+    pub status: CHealthStatus,
+    pub duration_ms: u64,
+    pub response_code: u16, // 0 if not applicable
+}
+
+/// Perform a one-shot health check (without monitor)
+///
+/// This is more efficient for single checks. Returns 0 on success, -1 on error.
+#[unsafe(no_mangle)]
+pub extern "C" fn healthcheck_check_once(
+    config: *const CHealthCheckConfig,
+    result: *mut CHealthCheckResult,
+) -> i32 {
+    if config.is_null() || result.is_null() {
+        return -1;
+    }
+
+    unsafe {
+        let c_config = &*config;
+
+        // Parse target
+        let target = match parse_c_string(c_config.target) {
+            Ok(s) => s,
+            Err(_) => return -1,
+        };
+
+        // Create runtime for async execution
+        let runtime = match Runtime::new() {
+            Ok(r) => r,
+            Err(_) => return -1,
+        };
+
+        // Create checker based on type
+        let checker_result: Arc<dyn HealthChecker> = match c_config.check_type {
+            0 => {
+                // TCP
+                let addr = match target.parse::<SocketAddr>() {
+                    Ok(a) => a,
+                    Err(_) => return -1,
+                };
+                Arc::new(TcpChecker::new(
+                    addr,
+                    Duration::from_millis(c_config.timeout_ms),
+                ))
+            }
+            1 => {
+                // HTTP
+                let method = match parse_c_string(c_config.http_method) {
+                    Ok(s) => s,
+                    Err(_) => "GET".to_string(),
+                };
+                let path = match parse_c_string(c_config.http_path) {
+                    Ok(s) => s,
+                    Err(_) => "/".to_string(),
+                };
+
+                let expected_codes = if !c_config.http_expected_codes.is_null()
+                    && c_config.http_expected_codes_count > 0
+                {
+                    std::slice::from_raw_parts(
+                        c_config.http_expected_codes,
+                        c_config.http_expected_codes_count,
+                    )
+                    .to_vec()
+                } else {
+                    vec![]
+                };
+
+                let protocol = if c_config.http_use_https {
+                    "https"
+                } else {
+                    "http"
+                };
+                let url = format!("{}://{}{}", protocol, target, path);
+
+                let req_method = match method.to_uppercase().as_str() {
+                    "GET" => reqwest::Method::GET,
+                    "POST" => reqwest::Method::POST,
+                    "HEAD" => reqwest::Method::HEAD,
+                    "PUT" => reqwest::Method::PUT,
+                    "DELETE" => reqwest::Method::DELETE,
+                    _ => reqwest::Method::GET,
+                };
+
+                match HttpChecker::new(
+                    url,
+                    req_method,
+                    expected_codes,
+                    Duration::from_millis(c_config.timeout_ms),
+                ) {
+                    Ok(checker) => Arc::new(checker),
+                    Err(_) => return -1,
+                }
+            }
+            3 => {
+                // DNS
+                let query = match parse_c_string(c_config.dns_query) {
+                    Ok(s) => s,
+                    Err(_) => return -1,
+                };
+
+                let expected_ips = if !c_config.dns_expected_ips.is_null()
+                    && c_config.dns_expected_ips_count > 0
+                {
+                    let ips_slice = std::slice::from_raw_parts(
+                        c_config.dns_expected_ips,
+                        c_config.dns_expected_ips_count,
+                    );
+
+                    let mut ips = Vec::new();
+                    for ip_ptr in ips_slice {
+                        if let Ok(ip_str) = parse_c_string(*ip_ptr) {
+                            if let Ok(ip) = ip_str.parse::<IpAddr>() {
+                                ips.push(ip);
+                            }
+                        }
+                    }
+                    ips
+                } else {
+                    vec![]
+                };
+
+                Arc::new(DnsChecker::new(
+                    query,
+                    expected_ips,
+                    Duration::from_millis(c_config.timeout_ms),
+                ))
+            }
+            _ => return -1,
+        };
+
+        // Perform the check
+        let check_result = runtime.block_on(async { checker_result.check().await });
+
+        // Convert to C result
+        *result = CHealthCheckResult {
+            status: check_result.status.into(),
+            duration_ms: check_result.duration.as_millis() as u64,
+            response_code: check_result.response_code.unwrap_or(0),
+        };
+
+        0
+    }
+}
+
 /// Get last error message
 ///
 /// Returns a static string describing the last error, or NULL if no error.

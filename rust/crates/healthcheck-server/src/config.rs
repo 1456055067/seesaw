@@ -126,6 +126,7 @@ pub struct LoggingSettings {
 
 /// Metrics settings
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[serde(default)]
 pub struct MetricsSettings {
     /// Enable metrics HTTP endpoint
     pub enabled: bool,
@@ -146,6 +147,7 @@ pub struct MetricsSettings {
 
 /// OpenTelemetry settings
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[serde(default)]
 pub struct TelemetrySettings {
     /// Enable OpenTelemetry tracing
     pub enabled: bool,

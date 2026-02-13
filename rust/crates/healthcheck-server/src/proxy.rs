@@ -73,9 +73,10 @@ impl ProxyComm {
 
         // Send Ready message to Go proxy
         let ready_msg = crate::types::ServerToProxyMsg::Ready;
-        let json = serde_json::to_string(&ready_msg)?;
-        writer.write_all(json.as_bytes()).await?;
-        writer.write_all(b"\n").await?;
+        // Pre-allocate a write buffer for serialization + newline in a single write
+        let mut write_buf = serde_json::to_vec(&ready_msg)?;
+        write_buf.push(b'\n');
+        writer.write_all(&write_buf).await?;
         writer.flush().await?;
         info!("Sent Ready message to Go proxy");
 
@@ -121,11 +122,13 @@ impl ProxyComm {
 
                 // Write to Go proxy (notifications, status, etc.)
                 Some(msg) = self.to_proxy_rx.recv() => {
-                    let json = serde_json::to_string(&msg)?;
-                    debug!("Sending message to Go proxy: {}", json);
+                    // Reuse write buffer: serialize to Vec + append newline for single write
+                    write_buf.clear();
+                    serde_json::to_writer(&mut write_buf, &msg)?;
+                    write_buf.push(b'\n');
+                    debug!("Sending message to Go proxy ({} bytes)", write_buf.len());
 
-                    writer.write_all(json.as_bytes()).await?;
-                    writer.write_all(b"\n").await?;
+                    writer.write_all(&write_buf).await?;
                     writer.flush().await?;
                 }
             }

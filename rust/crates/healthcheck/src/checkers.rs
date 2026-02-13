@@ -143,6 +143,8 @@ impl HealthChecker for HttpChecker {
 /// DNS health checker
 pub struct DnsChecker {
     query: String,
+    /// Pre-formatted "query:0" string for lookup_host (avoids allocation per check)
+    lookup_target: String,
     expected_ips: Vec<std::net::IpAddr>,
     timeout_duration: Duration,
 }
@@ -154,8 +156,10 @@ impl DnsChecker {
         expected_ips: Vec<std::net::IpAddr>,
         timeout_duration: Duration,
     ) -> Self {
+        let lookup_target = format!("{}:0", &query);
         Self {
             query,
+            lookup_target,
             expected_ips,
             timeout_duration,
         }
@@ -167,10 +171,10 @@ impl HealthChecker for DnsChecker {
     async fn check(&self) -> HealthCheckResult {
         let start = Instant::now();
 
-        // Use system DNS resolver
+        // Use system DNS resolver with pre-cached lookup target
         match timeout(
             self.timeout_duration,
-            tokio::net::lookup_host(format!("{}:0", self.query)),
+            tokio::net::lookup_host(self.lookup_target.as_str()),
         )
         .await
         {

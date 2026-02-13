@@ -216,80 +216,103 @@ impl Manager {
                 m.update_monitor_count(monitors.len());
             }
 
-            // Check all monitors
-            for mut entry in monitors.iter_mut() {
-                let (id, state) = entry.pair_mut();
+            // Collect monitor snapshots without holding DashMap locks across awaits.
+            // This avoids blocking other tasks that need to access monitors.
+            struct MonitorSnapshot {
+                id: HealthcheckId,
+                is_healthy: bool,
+                stats: healthcheck::types::HealthCheckStats,
+                checker_type: &'static str,
+                prev_successes: u64,
+                prev_failures: u64,
+                last_state: State,
+            }
 
-                // Get current health status
+            let mut snapshots = Vec::with_capacity(monitors.len());
+            for entry in monitors.iter() {
+                let (id, state) = entry.pair();
                 let is_healthy = state.monitor.is_healthy().await;
                 let stats = state.monitor.get_stats().await;
-
-                // Determine checker type for metrics
                 let checker_type = match &state.config.checker {
                     CheckerConfig::Tcp { .. } => "tcp",
                     CheckerConfig::Http { .. } => "http",
                     CheckerConfig::Dns { .. } => "dns",
                 };
+                snapshots.push(MonitorSnapshot {
+                    id: *id,
+                    is_healthy,
+                    stats,
+                    checker_type,
+                    prev_successes: state.successes,
+                    prev_failures: state.failures,
+                    last_state: state.last_state,
+                });
+            }
 
-                // Record check metrics (detect new checks by comparing counts)
+            // Process snapshots without holding any DashMap locks
+            for snap in &snapshots {
+                // Format ID once, reuse across all metric calls
+                let id_str = snap.id.to_string();
+                let response_time = Duration::from_millis(snap.stats.avg_response_time_ms as u64);
+
+                // Record check metrics
                 if let Some(ref m) = metrics {
-                    let new_successes = stats.successful_checks;
-                    let new_failures = stats.failed_checks;
-                    let response_time = Duration::from_millis(stats.avg_response_time_ms as u64);
-
-                    if new_successes > state.successes {
-                        m.record_check(*id, checker_type, "success", response_time);
+                    if snap.stats.successful_checks > snap.prev_successes {
+                        m.record_check_with_id(&id_str, snap.checker_type, "success", response_time);
                     }
-                    if new_failures > state.failures {
-                        m.record_check(*id, checker_type, "failure", response_time);
+                    if snap.stats.failed_checks > snap.prev_failures {
+                        m.record_check_with_id(&id_str, snap.checker_type, "failure", response_time);
                     }
-
-                    // Update state and consecutive count gauges
-                    m.update_state(*id, checker_type, is_healthy);
-                    m.update_consecutive(
-                        *id,
-                        checker_type,
-                        stats.consecutive_successes as u64,
-                        stats.consecutive_failures as u64,
+                    m.update_state_with_id(&id_str, snap.checker_type, snap.is_healthy);
+                    m.update_consecutive_with_id(
+                        &id_str,
+                        snap.checker_type,
+                        snap.stats.consecutive_successes as u64,
+                        snap.stats.consecutive_failures as u64,
                     );
                 }
 
-                // Update counts
-                state.successes = stats.successful_checks;
-                state.failures = stats.failed_checks;
-
                 // Determine new state
-                let new_state = if is_healthy {
+                let new_state = if snap.is_healthy {
                     State::Healthy
                 } else {
                     State::Unhealthy
                 };
 
-                // Send notification on state change
-                if new_state != state.last_state {
+                // Update DashMap entry (brief lock)
+                if let Some(mut entry) = monitors.get_mut(&snap.id) {
+                    entry.successes = snap.stats.successful_checks;
+                    entry.failures = snap.stats.failed_checks;
+
+                    if new_state != snap.last_state {
+                        entry.last_state = new_state;
+                    }
+                }
+
+                // Send notification on state change (outside DashMap lock)
+                if new_state != snap.last_state {
                     info!(
-                        id = *id,
-                        old_state = ?state.last_state,
+                        id = snap.id,
+                        old_state = ?snap.last_state,
                         new_state = ?new_state,
                         "Health state changed"
                     );
 
-                    // Record state transition metric
                     if let Some(ref m) = metrics {
-                        m.record_state_transition(*id, checker_type, state.last_state, new_state);
+                        m.record_state_transition(snap.id, snap.checker_type, snap.last_state, new_state);
                     }
 
                     let notification = Notification {
-                        id: *id,
+                        id: snap.id,
                         status: Status {
                             last_check: Some(SystemTime::now()),
-                            duration: Duration::from_millis(stats.avg_response_time_ms as u64),
-                            failures: stats.failed_checks,
-                            successes: stats.successful_checks,
+                            duration: response_time,
+                            failures: snap.stats.failed_checks,
+                            successes: snap.stats.successful_checks,
                             state: new_state,
                             message: format!(
                                 "{}/{} checks successful",
-                                stats.successful_checks, stats.total_checks
+                                snap.stats.successful_checks, snap.stats.total_checks
                             ),
                         },
                     };
@@ -297,8 +320,6 @@ impl Manager {
                     if let Err(e) = notify_tx.send(notification).await {
                         warn!(error = %e, "Failed to send notification");
                     }
-
-                    state.last_state = new_state;
                 }
             }
 

@@ -48,7 +48,7 @@ impl Notifier {
     pub async fn run(mut self) {
         info!("Notifier task started");
 
-        let mut batch = Vec::new();
+        let mut batch = Vec::with_capacity(self.batch_size);
         let mut batch_timer = interval(self.batch_delay);
         batch_timer.tick().await; // Skip first immediate tick
 
@@ -102,16 +102,16 @@ impl Notifier {
             m.record_batch_sent(batch.len(), trigger, delay);
         }
 
+        // Take ownership of the batch contents, replacing with a pre-allocated empty Vec.
+        // This avoids cloning the entire batch and reuses the allocation.
+        let notifications = std::mem::replace(batch, Vec::with_capacity(self.batch_size));
+
         let msg = ServerToProxyMsg::NotificationBatch {
-            batch: NotificationBatch {
-                notifications: batch.clone(),
-            },
+            batch: NotificationBatch { notifications },
         };
 
         if let Err(e) = self.proxy_tx.send(msg).await {
             warn!(error = %e, "Failed to send batch to proxy");
         }
-
-        batch.clear();
     }
 }

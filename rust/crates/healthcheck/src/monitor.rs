@@ -72,7 +72,7 @@ impl HealthCheckMonitor {
 
     /// Get statistics
     pub async fn get_stats(&self) -> HealthCheckStats {
-        self.stats.read().await.clone()
+        *self.stats.read().await
     }
 
     /// Process a health check result

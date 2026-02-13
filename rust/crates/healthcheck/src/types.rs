@@ -160,7 +160,7 @@ pub enum CheckType {
 }
 
 /// Health check statistics
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct HealthCheckStats {
     /// Total checks performed
     pub total_checks: u64,

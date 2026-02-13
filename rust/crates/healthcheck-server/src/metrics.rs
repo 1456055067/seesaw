@@ -276,43 +276,65 @@ impl MetricsRegistry {
         }
     }
 
-    /// Record a health check result
+    /// Record a health check result.
+    /// Accepts a pre-built `id_str` to avoid repeated u64-to-String conversion
+    /// when the caller records multiple metrics for the same healthcheck.
     pub fn record_check(&self, id: u64, checker_type: &str, result: &str, response_time: Duration) {
+        let id_str = id.to_string();
+        self.record_check_with_id(&id_str, checker_type, result, response_time);
+    }
+
+    /// Record a health check result with a pre-formatted ID string.
+    pub fn record_check_with_id(&self, id_str: &str, checker_type: &str, result: &str, response_time: Duration) {
+        let hc_labels = HealthcheckLabels {
+            id: id_str.to_owned(),
+            checker_type: checker_type.to_owned(),
+        };
+
         // Increment check counter
         self.checks_total
             .get_or_create(&CheckLabels {
-                id: id.to_string(),
-                checker_type: checker_type.to_string(),
-                result: result.to_string(),
+                id: id_str.to_owned(),
+                checker_type: checker_type.to_owned(),
+                result: result.to_owned(),
             })
             .inc();
 
         // Record response time
         self.response_time_seconds
-            .get_or_create(&HealthcheckLabels {
-                id: id.to_string(),
-                checker_type: checker_type.to_string(),
-            })
+            .get_or_create(&hc_labels)
             .observe(response_time.as_secs_f64());
     }
 
     /// Update health state gauge
     pub fn update_state(&self, id: u64, checker_type: &str, is_healthy: bool) {
+        let id_str = id.to_string();
+        self.update_state_with_id(&id_str, checker_type, is_healthy);
+    }
+
+    /// Update health state gauge with a pre-formatted ID string.
+    pub fn update_state_with_id(&self, id_str: &str, checker_type: &str, is_healthy: bool) {
         let state_value = if is_healthy { 1 } else { 2 };
 
         self.state
             .get_or_create(&HealthcheckLabels {
-                id: id.to_string(),
-                checker_type: checker_type.to_string(),
+                id: id_str.to_owned(),
+                checker_type: checker_type.to_owned(),
             })
             .set(state_value);
     }
 
     /// Update consecutive success/failure counts
     pub fn update_consecutive(&self, id: u64, checker_type: &str, successes: u64, failures: u64) {
+        let id_str = id.to_string();
+        self.update_consecutive_with_id(&id_str, checker_type, successes, failures);
+    }
+
+    /// Update consecutive success/failure counts with a pre-formatted ID string.
+    pub fn update_consecutive_with_id(&self, id_str: &str, checker_type: &str, successes: u64, failures: u64) {
         let labels = HealthcheckLabels {
-            id: id.to_string(),
-            checker_type: checker_type.to_string(),
+            id: id_str.to_owned(),
+            checker_type: checker_type.to_owned(),
         };
 
         self.consecutive_successes
@@ -335,9 +357,9 @@ impl MetricsRegistry {
         self.state_transitions_total
             .get_or_create(&StateTransitionLabels {
                 id: id.to_string(),
-                checker_type: checker_type.to_string(),
-                from: state_to_string(from_state),
-                to: state_to_string(to_state),
+                checker_type: checker_type.to_owned(),
+                from: state_to_str(from_state).to_owned(),
+                to: state_to_str(to_state).to_owned(),
             })
             .inc();
     }
@@ -349,23 +371,14 @@ impl MetricsRegistry {
 
     /// Update monitors by state count
     pub fn update_monitors_by_state(&self, healthy: usize, unhealthy: usize, unknown: usize) {
-        self.monitors_by_state
-            .get_or_create(&StateLabels {
-                state: "healthy".to_string(),
-            })
-            .set(healthy as i64);
+        // Use static labels to avoid per-call allocations
+        static HEALTHY: std::sync::LazyLock<StateLabels> = std::sync::LazyLock::new(|| StateLabels { state: "healthy".to_owned() });
+        static UNHEALTHY: std::sync::LazyLock<StateLabels> = std::sync::LazyLock::new(|| StateLabels { state: "unhealthy".to_owned() });
+        static UNKNOWN: std::sync::LazyLock<StateLabels> = std::sync::LazyLock::new(|| StateLabels { state: "unknown".to_owned() });
 
-        self.monitors_by_state
-            .get_or_create(&StateLabels {
-                state: "unhealthy".to_string(),
-            })
-            .set(unhealthy as i64);
-
-        self.monitors_by_state
-            .get_or_create(&StateLabels {
-                state: "unknown".to_string(),
-            })
-            .set(unknown as i64);
+        self.monitors_by_state.get_or_create(&HEALTHY).set(healthy as i64);
+        self.monitors_by_state.get_or_create(&UNHEALTHY).set(unhealthy as i64);
+        self.monitors_by_state.get_or_create(&UNKNOWN).set(unknown as i64);
     }
 
     /// Record notification batched
@@ -377,7 +390,7 @@ impl MetricsRegistry {
     pub fn record_batch_sent(&self, size: usize, trigger: &str, delay: Duration) {
         self.notifications_sent_total
             .get_or_create(&BatchTriggerLabels {
-                trigger: trigger.to_string(),
+                trigger: trigger.to_owned(),
             })
             .inc();
 
@@ -399,7 +412,7 @@ impl MetricsRegistry {
     pub fn record_error(&self, error_type: &str) {
         self.errors_total
             .get_or_create(&ErrorLabels {
-                error_type: error_type.to_string(),
+                error_type: error_type.to_owned(),
             })
             .inc();
     }
@@ -408,7 +421,7 @@ impl MetricsRegistry {
     pub fn update_channel_depth(&self, channel: &str, depth: usize) {
         self.channel_depth
             .get_or_create(&ChannelLabels {
-                channel: channel.to_string(),
+                channel: channel.to_owned(),
             })
             .set(depth as i64);
     }
@@ -420,12 +433,12 @@ impl MetricsRegistry {
     }
 }
 
-/// Convert State enum to string for labels
-fn state_to_string(state: State) -> String {
+/// Convert State enum to string for labels (zero-allocation)
+fn state_to_str(state: State) -> &'static str {
     match state {
-        State::Unknown => "unknown".to_string(),
-        State::Healthy => "healthy".to_string(),
-        State::Unhealthy => "unhealthy".to_string(),
+        State::Unknown => "unknown",
+        State::Healthy => "healthy",
+        State::Unhealthy => "unhealthy",
     }
 }
 
@@ -589,9 +602,9 @@ mod tests {
     }
 
     #[test]
-    fn test_state_to_string() {
-        assert_eq!(state_to_string(State::Unknown), "unknown");
-        assert_eq!(state_to_string(State::Healthy), "healthy");
-        assert_eq!(state_to_string(State::Unhealthy), "unhealthy");
+    fn test_state_to_str() {
+        assert_eq!(state_to_str(State::Unknown), "unknown");
+        assert_eq!(state_to_str(State::Healthy), "healthy");
+        assert_eq!(state_to_str(State::Unhealthy), "unhealthy");
     }
 }

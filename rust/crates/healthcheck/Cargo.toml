@@ -20,9 +20,6 @@ humantime-serde = "1.1"
 # HTTP/HTTPS health checks
 reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
 
-# DNS health checks
-trust-dns-resolver = "0.23"
-
 # Metrics and timing
 prometheus-client = "0.22"
 

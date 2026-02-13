@@ -33,10 +33,7 @@ impl VRRPNode {
     /// * `interface` - Network interface name
     /// * `primary_ip` - Primary IP address of this node
     pub fn new(config: VRRPConfig, interface: &str, primary_ip: IpAddr) -> io::Result<Self> {
-        let is_ipv6 = match config.virtual_ips.first() {
-            Some(IpAddr::V6(_)) => true,
-            _ => false,
-        };
+        let is_ipv6 = matches!(config.virtual_ips.first(), Some(IpAddr::V6(_)));
 
         let socket = VRRPSocket::new(interface, is_ipv6)?;
         socket.join_multicast()?;

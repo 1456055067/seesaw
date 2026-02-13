@@ -24,11 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cfg.telemetry.enabled,
                 cfg.telemetry.service_name.clone(),
                 cfg.telemetry.otlp_endpoint.clone(),
-                cfg.logging
-                    .level
-                    .as_deref()
-                    .unwrap_or("info")
-                    .to_string(),
+                cfg.logging.level.as_deref().unwrap_or("info").to_string(),
             )
         } else {
             (

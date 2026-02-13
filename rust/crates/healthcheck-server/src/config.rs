@@ -7,10 +7,6 @@ use std::time::Duration;
 use thiserror::Error;
 use validator::{Validate, ValidationError};
 
-// Re-export Validate trait for derive macro
-#[allow(unused_imports)]
-use validator::Validate as _;
-
 /// Configuration error types
 #[derive(Debug, Error)]
 pub enum ConfigError {
@@ -28,7 +24,7 @@ pub enum ConfigError {
 }
 
 /// Main configuration structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub server: ServerSettings,
@@ -70,7 +66,7 @@ impl Validate for Config {
 /// Server-level settings
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct ServerSettings {
-    #[validate(length(min = 1), custom = "validate_socket_path")]
+    #[validate(length(min = 1), custom(function = validate_socket_path))]
     pub proxy_socket: String,
 }
 
@@ -78,7 +74,7 @@ pub struct ServerSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct BatchingSettings {
     #[serde(with = "humantime_serde")]
-    #[validate(custom = "validate_batch_delay")]
+    #[validate(custom(function = validate_batch_delay))]
     pub delay: Duration,
 
     #[validate(range(min = 1, max = 10000))]
@@ -102,7 +98,7 @@ pub struct ChannelSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct ManagerSettings {
     #[serde(with = "humantime_serde")]
-    #[validate(custom = "validate_monitor_interval")]
+    #[validate(custom(function = validate_monitor_interval))]
     pub monitor_interval: Duration,
 }
 
@@ -122,7 +118,7 @@ pub struct AdvancedSettings {
 }
 
 /// Logging settings
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LoggingSettings {
     pub level: Option<String>,
     pub format: Option<String>,
@@ -220,15 +216,6 @@ impl Default for AdvancedSettings {
     }
 }
 
-impl Default for LoggingSettings {
-    fn default() -> Self {
-        Self {
-            level: None,
-            format: None,
-        }
-    }
-}
-
 impl Default for MetricsSettings {
     fn default() -> Self {
         Self {
@@ -257,21 +244,6 @@ impl Default for TelemetrySettings {
     }
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            server: ServerSettings::default(),
-            batching: BatchingSettings::default(),
-            channels: ChannelSettings::default(),
-            manager: ManagerSettings::default(),
-            advanced: AdvancedSettings::default(),
-            logging: LoggingSettings::default(),
-            metrics: MetricsSettings::default(),
-            telemetry: TelemetrySettings::default(),
-        }
-    }
-}
-
 // Custom validators
 
 fn validate_socket_path(path: &str) -> Result<(), ValidationError> {
@@ -290,7 +262,7 @@ fn validate_socket_path(path: &str) -> Result<(), ValidationError> {
 
 fn validate_batch_delay(delay: &Duration) -> Result<(), ValidationError> {
     let millis = delay.as_millis();
-    if millis < 1 || millis > 10_000 {
+    if !(1..=10_000).contains(&millis) {
         return Err(ValidationError::new("batch_delay_out_of_range"));
     }
     Ok(())
@@ -298,7 +270,7 @@ fn validate_batch_delay(delay: &Duration) -> Result<(), ValidationError> {
 
 fn validate_monitor_interval(interval: &Duration) -> Result<(), ValidationError> {
     let millis = interval.as_millis();
-    if millis < 10 || millis > 60_000 {
+    if !(10..=60_000).contains(&millis) {
         return Err(ValidationError::new("monitor_interval_out_of_range"));
     }
     Ok(())

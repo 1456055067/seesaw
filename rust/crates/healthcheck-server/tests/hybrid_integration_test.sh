@@ -5,7 +5,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 SERVER_BIN="$PROJECT_ROOT/rust/target/debug/healthcheck-server"
 SERVER_DIR="$(dirname "$SERVER_BIN")"
 SOCKET_PATH="/tmp/healthcheck-hybrid-test.sock"

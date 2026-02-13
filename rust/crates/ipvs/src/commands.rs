@@ -51,6 +51,7 @@ impl From<IPVSCommand> for u8 {
 /// IPVS netlink attributes
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum IPVSAttr {
     Unspec = 0,
     /// Service information (nested)
@@ -70,6 +71,7 @@ pub enum IPVSAttr {
 /// Service-specific attributes (nested under IPVS_ATTR_SERVICE)
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum IPVSServiceAttr {
     Unspec = 0,
     /// Address family (AF_INET or AF_INET6)
@@ -101,6 +103,7 @@ pub enum IPVSServiceAttr {
 /// Destination-specific attributes (nested under IPVS_ATTR_DEST)
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum IPVSDestAttr {
     Unspec = 0,
     /// Destination IP address
@@ -130,6 +133,8 @@ pub enum IPVSDestAttr {
 /// Statistics attributes
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::upper_case_acronyms)]
+#[allow(dead_code)]
 pub enum IPVSStatsAttr {
     Unspec = 0,
     /// Total connections
@@ -157,6 +162,7 @@ pub enum IPVSStatsAttr {
 /// Info attributes (for IPVS_CMD_GET_INFO)
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum IPVSInfoAttr {
     Unspec = 0,
     /// IPVS version

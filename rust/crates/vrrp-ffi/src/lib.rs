@@ -87,8 +87,12 @@ impl From<VRRPStats> for CVrrpStats {
 /// Create a new VRRP node
 ///
 /// Returns a handle to the VRRP node, or null on error.
+///
+/// # Safety
+///
+/// `config` must be a valid pointer to a `CVrrpConfig` struct with valid fields.
 #[unsafe(no_mangle)]
-pub extern "C" fn vrrp_new(config: *const CVrrpConfig) -> *mut VrrpHandle {
+pub unsafe extern "C" fn vrrp_new(config: *const CVrrpConfig) -> *mut VrrpHandle {
     if config.is_null() {
         return ptr::null_mut();
     }
@@ -163,8 +167,12 @@ pub extern "C" fn vrrp_new(config: *const CVrrpConfig) -> *mut VrrpHandle {
 }
 
 /// Free a VRRP node handle
+///
+/// # Safety
+///
+/// `handle` must be a valid pointer returned by `vrrp_new`, or null.
 #[unsafe(no_mangle)]
-pub extern "C" fn vrrp_free(handle: *mut VrrpHandle) {
+pub unsafe extern "C" fn vrrp_free(handle: *mut VrrpHandle) {
     if !handle.is_null() {
         let handle = unsafe { Box::from_raw(handle) };
 
@@ -181,8 +189,12 @@ pub extern "C" fn vrrp_free(handle: *mut VrrpHandle) {
 ///
 /// This function blocks until the VRRP node terminates or an error occurs.
 /// Returns 0 on success, -1 on error.
+///
+/// # Safety
+///
+/// `handle` must be a valid pointer returned by `vrrp_new`.
 #[unsafe(no_mangle)]
-pub extern "C" fn vrrp_run(handle: *mut VrrpHandle) -> i32 {
+pub unsafe extern "C" fn vrrp_run(handle: *mut VrrpHandle) -> i32 {
     if handle.is_null() {
         return -1;
     }
@@ -199,8 +211,12 @@ pub extern "C" fn vrrp_run(handle: *mut VrrpHandle) -> i32 {
 ///
 /// Returns a thread handle that can be used to wait for completion.
 /// Returns null on error.
+///
+/// # Safety
+///
+/// `handle` must be a valid pointer returned by `vrrp_new`.
 #[unsafe(no_mangle)]
-pub extern "C" fn vrrp_run_async(handle: *mut VrrpHandle) -> *mut std::thread::JoinHandle<i32> {
+pub unsafe extern "C" fn vrrp_run_async(handle: *mut VrrpHandle) -> *mut std::thread::JoinHandle<i32> {
     if handle.is_null() {
         return ptr::null_mut();
     }
@@ -225,8 +241,12 @@ pub extern "C" fn vrrp_run_async(handle: *mut VrrpHandle) -> *mut std::thread::J
 }
 
 /// Get the current VRRP state
+///
+/// # Safety
+///
+/// `handle` must be a valid pointer returned by `vrrp_new`.
 #[unsafe(no_mangle)]
-pub extern "C" fn vrrp_get_state(handle: *const VrrpHandle) -> CVrrpState {
+pub unsafe extern "C" fn vrrp_get_state(handle: *const VrrpHandle) -> CVrrpState {
     if handle.is_null() {
         return CVrrpState::Init;
     }
@@ -243,8 +263,13 @@ pub extern "C" fn vrrp_get_state(handle: *const VrrpHandle) -> CVrrpState {
 /// Get VRRP statistics
 ///
 /// Returns true if successful, false on error.
+///
+/// # Safety
+///
+/// `handle` must be a valid pointer returned by `vrrp_new`.
+/// `stats` must be a valid pointer to a `CVrrpStats` struct.
 #[unsafe(no_mangle)]
-pub extern "C" fn vrrp_get_stats(handle: *const VrrpHandle, stats: *mut CVrrpStats) -> bool {
+pub unsafe extern "C" fn vrrp_get_stats(handle: *const VrrpHandle, stats: *mut CVrrpStats) -> bool {
     if handle.is_null() || stats.is_null() {
         return false;
     }
@@ -265,8 +290,12 @@ pub extern "C" fn vrrp_get_stats(handle: *const VrrpHandle, stats: *mut CVrrpSta
 /// Shutdown the VRRP node gracefully
 ///
 /// Returns 0 on success, -1 on error.
+///
+/// # Safety
+///
+/// `handle` must be a valid pointer returned by `vrrp_new`.
 #[unsafe(no_mangle)]
-pub extern "C" fn vrrp_shutdown(handle: *mut VrrpHandle) -> i32 {
+pub unsafe extern "C" fn vrrp_shutdown(handle: *mut VrrpHandle) -> i32 {
     if handle.is_null() {
         return -1;
     }
@@ -289,7 +318,7 @@ pub extern "C" fn vrrp_shutdown(handle: *mut VrrpHandle) -> i32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn vrrp_last_error() -> *const c_char {
     // TODO: Implement thread-local error storage
-    b"Not implemented\0".as_ptr() as *const c_char
+    c"Not implemented".as_ptr()
 }
 
 #[cfg(test)]

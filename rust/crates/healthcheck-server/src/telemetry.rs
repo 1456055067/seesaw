@@ -3,14 +3,14 @@
 //! This module provides OpenTelemetry tracing capabilities for the healthcheck server,
 //! enabling distributed tracing and observability.
 
-use opentelemetry::{trace::TracerProvider as _, KeyValue};
+use opentelemetry::KeyValue;
+use opentelemetry::trace::TracerProvider as TracerProviderTrait;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
-    runtime,
+    Resource, runtime,
     trace::{RandomIdGenerator, Sampler, TracerProvider},
-    Resource,
 };
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 /// OpenTelemetry tracer guard
 ///
@@ -64,18 +64,15 @@ pub async fn init_telemetry(
     ]);
 
     // Create tracer provider with batch span processor
-    let tracer = TracerProvider::builder()
+    let tracer_provider = TracerProvider::builder()
         .with_batch_exporter(exporter, runtime::Tokio)
-        .with_config(
-            opentelemetry_sdk::trace::Config::default()
-                .with_sampler(Sampler::AlwaysOn)
-                .with_id_generator(RandomIdGenerator::default())
-                .with_resource(resource),
-        )
+        .with_sampler(Sampler::AlwaysOn)
+        .with_id_generator(RandomIdGenerator::default())
+        .with_resource(resource)
         .build();
 
     // Set global tracer provider
-    opentelemetry::global::set_tracer_provider(tracer);
+    opentelemetry::global::set_tracer_provider(tracer_provider);
 
     tracing::info!("OpenTelemetry tracing initialized successfully");
 
@@ -114,17 +111,14 @@ pub async fn init_telemetry_http(
     ]);
 
     // Create tracer provider
-    let tracer = TracerProvider::builder()
+    let tracer_provider = TracerProvider::builder()
         .with_batch_exporter(exporter, runtime::Tokio)
-        .with_config(
-            opentelemetry_sdk::trace::Config::default()
-                .with_sampler(Sampler::AlwaysOn)
-                .with_id_generator(RandomIdGenerator::default())
-                .with_resource(resource),
-        )
+        .with_sampler(Sampler::AlwaysOn)
+        .with_id_generator(RandomIdGenerator::default())
+        .with_resource(resource)
         .build();
 
-    opentelemetry::global::set_tracer_provider(tracer);
+    opentelemetry::global::set_tracer_provider(tracer_provider);
 
     tracing::info!("OpenTelemetry HTTP tracing initialized successfully");
 
@@ -141,13 +135,29 @@ pub async fn setup_tracing_with_otel(
     enabled: bool,
     log_level: &str,
 ) -> Result<Option<TelemetryGuard>, Box<dyn std::error::Error>> {
-    // Initialize OpenTelemetry first
-    let guard = init_telemetry(service_name, otlp_endpoint, enabled).await?;
-
-    // Create OpenTelemetry layer for tracing-subscriber
     if enabled {
-        let telemetry_layer = tracing_opentelemetry::layer()
-            .with_tracer(opentelemetry::global::tracer("healthcheck-server"));
+        // Build TracerProvider and get an SDK tracer before setting it as global
+        let exporter = opentelemetry_otlp::SpanExporter::builder()
+            .with_tonic()
+            .with_endpoint(otlp_endpoint)
+            .build()?;
+
+        let resource = Resource::new(vec![
+            KeyValue::new("service.name", service_name.to_string()),
+            KeyValue::new("service.version", env!("CARGO_PKG_VERSION").to_string()),
+        ]);
+
+        let tracer_provider = TracerProvider::builder()
+            .with_batch_exporter(exporter, runtime::Tokio)
+            .with_sampler(Sampler::AlwaysOn)
+            .with_id_generator(RandomIdGenerator::default())
+            .with_resource(resource)
+            .build();
+
+        let tracer = tracer_provider.tracer("healthcheck-server");
+        opentelemetry::global::set_tracer_provider(tracer_provider);
+
+        let telemetry_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
         // Setup tracing subscriber with both stdout and OpenTelemetry
         tracing_subscriber::registry()
@@ -157,6 +167,7 @@ pub async fn setup_tracing_with_otel(
             .init();
 
         tracing::info!("Tracing initialized with OpenTelemetry integration");
+        Ok(Some(TelemetryGuard))
     } else {
         // Just stdout logging
         tracing_subscriber::registry()
@@ -165,9 +176,8 @@ pub async fn setup_tracing_with_otel(
             .init();
 
         tracing::info!("Tracing initialized without OpenTelemetry");
+        Ok(None)
     }
-
-    Ok(guard)
 }
 
 #[cfg(test)]

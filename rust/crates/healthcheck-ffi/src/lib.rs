@@ -132,8 +132,12 @@ unsafe fn parse_c_string(ptr: *const c_char) -> Result<String, Box<dyn std::erro
 /// Create a new health check monitor
 ///
 /// Returns NULL on error. Use healthcheck_free to clean up.
+///
+/// # Safety
+///
+/// `config` must be a valid pointer to a `CHealthCheckConfig` struct.
 #[unsafe(no_mangle)]
-pub extern "C" fn healthcheck_new(config: *const CHealthCheckConfig) -> *mut HealthCheckHandle {
+pub unsafe extern "C" fn healthcheck_new(config: *const CHealthCheckConfig) -> *mut HealthCheckHandle {
     if config.is_null() {
         tracing::error!("healthcheck_new: null config");
         return std::ptr::null_mut();
@@ -291,8 +295,12 @@ pub extern "C" fn healthcheck_new(config: *const CHealthCheckConfig) -> *mut Hea
 }
 
 /// Free a health check monitor
+///
+/// # Safety
+///
+/// `handle` must be a valid pointer returned by `healthcheck_new`, or null.
 #[unsafe(no_mangle)]
-pub extern "C" fn healthcheck_free(handle: *mut HealthCheckHandle) {
+pub unsafe extern "C" fn healthcheck_free(handle: *mut HealthCheckHandle) {
     if !handle.is_null() {
         unsafe {
             let handle = Box::from_raw(handle);
@@ -308,8 +316,12 @@ pub extern "C" fn healthcheck_free(handle: *mut HealthCheckHandle) {
 /// Start health checking
 ///
 /// Returns 0 on success, -1 on error
+///
+/// # Safety
+///
+/// `handle` must be a valid pointer returned by `healthcheck_new`.
 #[unsafe(no_mangle)]
-pub extern "C" fn healthcheck_start(handle: *mut HealthCheckHandle) -> i32 {
+pub unsafe extern "C" fn healthcheck_start(handle: *mut HealthCheckHandle) -> i32 {
     if handle.is_null() {
         return -1;
     }
@@ -327,8 +339,12 @@ pub extern "C" fn healthcheck_start(handle: *mut HealthCheckHandle) -> i32 {
 /// Stop health checking
 ///
 /// Returns 0 on success, -1 on error
+///
+/// # Safety
+///
+/// `handle` must be a valid pointer returned by `healthcheck_new`.
 #[unsafe(no_mangle)]
-pub extern "C" fn healthcheck_stop(handle: *mut HealthCheckHandle) -> i32 {
+pub unsafe extern "C" fn healthcheck_stop(handle: *mut HealthCheckHandle) -> i32 {
     if handle.is_null() {
         return -1;
     }
@@ -346,8 +362,12 @@ pub extern "C" fn healthcheck_stop(handle: *mut HealthCheckHandle) -> i32 {
 /// Check if the service is healthy
 ///
 /// Returns 1 if healthy, 0 if unhealthy, -1 on error
+///
+/// # Safety
+///
+/// `handle` must be a valid pointer returned by `healthcheck_new`.
 #[unsafe(no_mangle)]
-pub extern "C" fn healthcheck_is_healthy(handle: *mut HealthCheckHandle) -> i32 {
+pub unsafe extern "C" fn healthcheck_is_healthy(handle: *mut HealthCheckHandle) -> i32 {
     if handle.is_null() {
         return -1;
     }
@@ -365,8 +385,13 @@ pub extern "C" fn healthcheck_is_healthy(handle: *mut HealthCheckHandle) -> i32 
 /// Get health check statistics
 ///
 /// Returns 0 on success, -1 on error
+///
+/// # Safety
+///
+/// `handle` must be a valid pointer returned by `healthcheck_new`.
+/// `stats` must be a valid pointer to a `CHealthCheckStats` struct.
 #[unsafe(no_mangle)]
-pub extern "C" fn healthcheck_get_stats(
+pub unsafe extern "C" fn healthcheck_get_stats(
     handle: *mut HealthCheckHandle,
     stats: *mut CHealthCheckStats,
 ) -> i32 {
@@ -397,8 +422,13 @@ pub struct CHealthCheckResult {
 /// Perform a one-shot health check (without monitor)
 ///
 /// This is more efficient for single checks. Returns 0 on success, -1 on error.
+///
+/// # Safety
+///
+/// `config` must be a valid pointer to a `CHealthCheckConfig` struct.
+/// `result` must be a valid pointer to a `CHealthCheckResult` struct.
 #[unsafe(no_mangle)]
-pub extern "C" fn healthcheck_check_once(
+pub unsafe extern "C" fn healthcheck_check_once(
     config: *const CHealthCheckConfig,
     result: *mut CHealthCheckResult,
 ) -> i32 {

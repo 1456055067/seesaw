@@ -109,11 +109,19 @@ typedef struct CHealthCheckResult {
  * Create a new health check monitor
  *
  * Returns NULL on error. Use healthcheck_free to clean up.
+ *
+ * # Safety
+ *
+ * `config` must be a valid pointer to a `CHealthCheckConfig` struct.
  */
 struct HealthCheckHandle *healthcheck_new(const struct CHealthCheckConfig *config);
 
 /**
  * Free a health check monitor
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer returned by `healthcheck_new`, or null.
  */
 void healthcheck_free(struct HealthCheckHandle *handle);
 
@@ -121,6 +129,10 @@ void healthcheck_free(struct HealthCheckHandle *handle);
  * Start health checking
  *
  * Returns 0 on success, -1 on error
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer returned by `healthcheck_new`.
  */
 int32_t healthcheck_start(struct HealthCheckHandle *handle);
 
@@ -128,6 +140,10 @@ int32_t healthcheck_start(struct HealthCheckHandle *handle);
  * Stop health checking
  *
  * Returns 0 on success, -1 on error
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer returned by `healthcheck_new`.
  */
 int32_t healthcheck_stop(struct HealthCheckHandle *handle);
 
@@ -135,6 +151,10 @@ int32_t healthcheck_stop(struct HealthCheckHandle *handle);
  * Check if the service is healthy
  *
  * Returns 1 if healthy, 0 if unhealthy, -1 on error
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer returned by `healthcheck_new`.
  */
 int32_t healthcheck_is_healthy(struct HealthCheckHandle *handle);
 
@@ -142,6 +162,11 @@ int32_t healthcheck_is_healthy(struct HealthCheckHandle *handle);
  * Get health check statistics
  *
  * Returns 0 on success, -1 on error
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer returned by `healthcheck_new`.
+ * `stats` must be a valid pointer to a `CHealthCheckStats` struct.
  */
 int32_t healthcheck_get_stats(struct HealthCheckHandle *handle, struct CHealthCheckStats *stats);
 
@@ -149,6 +174,11 @@ int32_t healthcheck_get_stats(struct HealthCheckHandle *handle, struct CHealthCh
  * Perform a one-shot health check (without monitor)
  *
  * This is more efficient for single checks. Returns 0 on success, -1 on error.
+ *
+ * # Safety
+ *
+ * `config` must be a valid pointer to a `CHealthCheckConfig` struct.
+ * `result` must be a valid pointer to a `CHealthCheckResult` struct.
  */
 int32_t healthcheck_check_once(const struct CHealthCheckConfig *config,
                                struct CHealthCheckResult *result);

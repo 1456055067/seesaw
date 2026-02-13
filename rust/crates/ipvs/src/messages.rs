@@ -40,6 +40,7 @@ impl IPVSMessage {
 
 /// Top-level IPVS netlink attributes.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum IPVSNla {
     /// Service information (nested attributes)
     Service(Vec<ServiceNla>),
@@ -53,6 +54,7 @@ pub enum IPVSNla {
 
 /// Service-specific netlink attributes.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum ServiceNla {
     /// Address family (AF_INET = 2, AF_INET6 = 10)
     AddressFamily(u16),
@@ -78,6 +80,7 @@ pub enum ServiceNla {
 
 /// Destination-specific netlink attributes.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum DestNla {
     /// IPv4 address (big-endian u32)
     Address(u32),

@@ -35,7 +35,6 @@ pub struct Manager {
 struct MonitorState {
     config: HealthcheckConfig,
     monitor: HealthCheckMonitor,
-    failed: u64,
     successes: u64,
     failures: u64,
     last_state: State,
@@ -133,7 +132,6 @@ impl Manager {
                     let state = MonitorState {
                         config: config.clone(),
                         monitor,
-                        failed: 0,
                         successes: 0,
                         failures: 0,
                         last_state: State::Unknown,

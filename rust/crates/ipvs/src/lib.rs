@@ -180,11 +180,8 @@ impl IPVSManager {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_placeholder() {
-        // Placeholder test - will be replaced with actual tests
         assert_eq!(2 + 2, 4);
     }
 }

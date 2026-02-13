@@ -102,7 +102,7 @@ pub struct ManagerSettings {
     pub monitor_interval: Duration,
 }
 
-/// Advanced settings (currently unused, reserved for future)
+/// Advanced settings for failure handling and intervals
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdvancedSettings {
     pub max_failures: usize,

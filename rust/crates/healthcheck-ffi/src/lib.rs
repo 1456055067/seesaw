@@ -129,6 +129,105 @@ unsafe fn parse_c_string(ptr: *const c_char) -> Result<String, Box<dyn std::erro
     unsafe { Ok(CStr::from_ptr(ptr).to_str()?.to_string()) }
 }
 
+/// Create a health checker from a C config.
+///
+/// # Safety
+///
+/// `c_config` must point to a valid `CHealthCheckConfig`. All pointer fields
+/// within (target, http_method, http_path, etc.) must be valid for the
+/// duration of this call.
+unsafe fn create_checker(
+    c_config: &CHealthCheckConfig,
+) -> Result<(Arc<dyn HealthChecker>, String), i32> {
+    let target = unsafe { parse_c_string(c_config.target).map_err(|_| -1)? };
+
+    let checker: Arc<dyn HealthChecker> = match c_config.check_type {
+        0 => {
+            // TCP
+            let addr = target.parse::<SocketAddr>().map_err(|_| -1)?;
+            Arc::new(TcpChecker::new(
+                addr,
+                Duration::from_millis(c_config.timeout_ms),
+            ))
+        }
+        1 => {
+            // HTTP
+            let method = unsafe { parse_c_string(c_config.http_method).unwrap_or("GET".into()) };
+            let path = unsafe { parse_c_string(c_config.http_path).unwrap_or("/".into()) };
+
+            let expected_codes = if !c_config.http_expected_codes.is_null()
+                && c_config.http_expected_codes_count > 0
+            {
+                unsafe {
+                    std::slice::from_raw_parts(
+                        c_config.http_expected_codes,
+                        c_config.http_expected_codes_count,
+                    )
+                    .to_vec()
+                }
+            } else {
+                vec![]
+            };
+
+            let protocol = if c_config.http_use_https {
+                "https"
+            } else {
+                "http"
+            };
+            let url = format!("{}://{}{}", protocol, target, path);
+
+            let req_method = match method.to_uppercase().as_str() {
+                "GET" => reqwest::Method::GET,
+                "POST" => reqwest::Method::POST,
+                "HEAD" => reqwest::Method::HEAD,
+                "PUT" => reqwest::Method::PUT,
+                "DELETE" => reqwest::Method::DELETE,
+                _ => reqwest::Method::GET,
+            };
+
+            HttpChecker::new(url, req_method, expected_codes, Duration::from_millis(c_config.timeout_ms))
+                .map(|c| Arc::new(c) as Arc<dyn HealthChecker>)
+                .map_err(|_| -1)?
+        }
+        3 => {
+            // DNS
+            let query = unsafe { parse_c_string(c_config.dns_query).map_err(|_| -1)? };
+
+            let expected_ips = if !c_config.dns_expected_ips.is_null()
+                && c_config.dns_expected_ips_count > 0
+            {
+                unsafe {
+                    let ips_slice = std::slice::from_raw_parts(
+                        c_config.dns_expected_ips,
+                        c_config.dns_expected_ips_count,
+                    );
+
+                    let mut ips = Vec::new();
+                    for ip_ptr in ips_slice {
+                        if let Ok(ip_str) = parse_c_string(*ip_ptr)
+                            && let Ok(ip) = ip_str.parse::<IpAddr>()
+                        {
+                            ips.push(ip);
+                        }
+                    }
+                    ips
+                }
+            } else {
+                vec![]
+            };
+
+            Arc::new(DnsChecker::new(
+                query,
+                expected_ips,
+                Duration::from_millis(c_config.timeout_ms),
+            ))
+        }
+        _ => return Err(-1),
+    };
+
+    Ok((checker, target))
+}
+
 /// Create a new health check monitor
 ///
 /// Returns NULL on error. Use healthcheck_free to clean up.
@@ -146,137 +245,23 @@ pub unsafe extern "C" fn healthcheck_new(config: *const CHealthCheckConfig) -> *
     let result = unsafe {
         let c_config = &*config;
 
-        // Parse target
-        let target = match parse_c_string(c_config.target) {
-            Ok(s) => s,
-            Err(e) => {
-                tracing::error!(error = %e, "Failed to parse target");
+        let (checker, target) = match create_checker(c_config) {
+            Ok(v) => v,
+            Err(_) => {
+                tracing::error!("Failed to create checker");
                 return std::ptr::null_mut();
             }
         };
 
-        // Build configuration
         let check_config = HealthCheckConfig {
-            target: target.clone(),
+            target,
             timeout: Duration::from_millis(c_config.timeout_ms),
             interval: Duration::from_millis(c_config.interval_ms),
             rise: c_config.rise,
             fall: c_config.fall,
-            check_type: CheckType::Tcp, // Placeholder, will be set below
+            check_type: CheckType::Tcp,
         };
 
-        // Create checker based on type
-        let checker: Arc<dyn HealthChecker> = match c_config.check_type {
-            0 => {
-                // TCP
-                let addr = match target.parse::<SocketAddr>() {
-                    Ok(a) => a,
-                    Err(e) => {
-                        tracing::error!(error = %e, "Failed to parse socket address");
-                        return std::ptr::null_mut();
-                    }
-                };
-                Arc::new(TcpChecker::new(
-                    addr,
-                    Duration::from_millis(c_config.timeout_ms),
-                ))
-            }
-            1 => {
-                // HTTP
-                let method = match parse_c_string(c_config.http_method) {
-                    Ok(s) => s,
-                    Err(_) => "GET".to_string(),
-                };
-                let path = match parse_c_string(c_config.http_path) {
-                    Ok(s) => s,
-                    Err(_) => "/".to_string(),
-                };
-
-                let expected_codes = if !c_config.http_expected_codes.is_null()
-                    && c_config.http_expected_codes_count > 0
-                {
-                    std::slice::from_raw_parts(
-                        c_config.http_expected_codes,
-                        c_config.http_expected_codes_count,
-                    )
-                    .to_vec()
-                } else {
-                    vec![]
-                };
-
-                let protocol = if c_config.http_use_https {
-                    "https"
-                } else {
-                    "http"
-                };
-                let url = format!("{}://{}{}", protocol, target, path);
-
-                let req_method = match method.to_uppercase().as_str() {
-                    "GET" => reqwest::Method::GET,
-                    "POST" => reqwest::Method::POST,
-                    "HEAD" => reqwest::Method::HEAD,
-                    "PUT" => reqwest::Method::PUT,
-                    "DELETE" => reqwest::Method::DELETE,
-                    _ => reqwest::Method::GET,
-                };
-
-                match HttpChecker::new(
-                    url,
-                    req_method,
-                    expected_codes,
-                    Duration::from_millis(c_config.timeout_ms),
-                ) {
-                    Ok(checker) => Arc::new(checker),
-                    Err(e) => {
-                        tracing::error!(error = %e, "Failed to create HTTP checker");
-                        return std::ptr::null_mut();
-                    }
-                }
-            }
-            3 => {
-                // DNS
-                let query = match parse_c_string(c_config.dns_query) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        tracing::error!(error = %e, "Failed to parse DNS query");
-                        return std::ptr::null_mut();
-                    }
-                };
-
-                let expected_ips = if !c_config.dns_expected_ips.is_null()
-                    && c_config.dns_expected_ips_count > 0
-                {
-                    let ips_slice = std::slice::from_raw_parts(
-                        c_config.dns_expected_ips,
-                        c_config.dns_expected_ips_count,
-                    );
-
-                    let mut ips = Vec::new();
-                    for ip_ptr in ips_slice {
-                        if let Ok(ip_str) = parse_c_string(*ip_ptr)
-                            && let Ok(ip) = ip_str.parse::<IpAddr>()
-                        {
-                            ips.push(ip);
-                        }
-                    }
-                    ips
-                } else {
-                    vec![]
-                };
-
-                Arc::new(DnsChecker::new(
-                    query,
-                    expected_ips,
-                    Duration::from_millis(c_config.timeout_ms),
-                ))
-            }
-            _ => {
-                tracing::error!("Unknown check type: {}", c_config.check_type);
-                return std::ptr::null_mut();
-            }
-        };
-
-        // Create runtime
         let runtime = match Runtime::new() {
             Ok(r) => Arc::new(r),
             Err(e) => {
@@ -285,7 +270,6 @@ pub unsafe extern "C" fn healthcheck_new(config: *const CHealthCheckConfig) -> *
             }
         };
 
-        // Create monitor
         let monitor = HealthCheckMonitor::new(checker, check_config);
 
         HealthCheckHandle { monitor, runtime }
@@ -439,121 +423,18 @@ pub unsafe extern "C" fn healthcheck_check_once(
     unsafe {
         let c_config = &*config;
 
-        // Parse target
-        let target = match parse_c_string(c_config.target) {
-            Ok(s) => s,
-            Err(_) => return -1,
+        let (checker, _target) = match create_checker(c_config) {
+            Ok(v) => v,
+            Err(code) => return code,
         };
 
-        // Create runtime for async execution
         let runtime = match Runtime::new() {
             Ok(r) => r,
             Err(_) => return -1,
         };
 
-        // Create checker based on type
-        let checker_result: Arc<dyn HealthChecker> = match c_config.check_type {
-            0 => {
-                // TCP
-                let addr = match target.parse::<SocketAddr>() {
-                    Ok(a) => a,
-                    Err(_) => return -1,
-                };
-                Arc::new(TcpChecker::new(
-                    addr,
-                    Duration::from_millis(c_config.timeout_ms),
-                ))
-            }
-            1 => {
-                // HTTP
-                let method = match parse_c_string(c_config.http_method) {
-                    Ok(s) => s,
-                    Err(_) => "GET".to_string(),
-                };
-                let path = match parse_c_string(c_config.http_path) {
-                    Ok(s) => s,
-                    Err(_) => "/".to_string(),
-                };
+        let check_result = runtime.block_on(async { checker.check().await });
 
-                let expected_codes = if !c_config.http_expected_codes.is_null()
-                    && c_config.http_expected_codes_count > 0
-                {
-                    std::slice::from_raw_parts(
-                        c_config.http_expected_codes,
-                        c_config.http_expected_codes_count,
-                    )
-                    .to_vec()
-                } else {
-                    vec![]
-                };
-
-                let protocol = if c_config.http_use_https {
-                    "https"
-                } else {
-                    "http"
-                };
-                let url = format!("{}://{}{}", protocol, target, path);
-
-                let req_method = match method.to_uppercase().as_str() {
-                    "GET" => reqwest::Method::GET,
-                    "POST" => reqwest::Method::POST,
-                    "HEAD" => reqwest::Method::HEAD,
-                    "PUT" => reqwest::Method::PUT,
-                    "DELETE" => reqwest::Method::DELETE,
-                    _ => reqwest::Method::GET,
-                };
-
-                match HttpChecker::new(
-                    url,
-                    req_method,
-                    expected_codes,
-                    Duration::from_millis(c_config.timeout_ms),
-                ) {
-                    Ok(checker) => Arc::new(checker),
-                    Err(_) => return -1,
-                }
-            }
-            3 => {
-                // DNS
-                let query = match parse_c_string(c_config.dns_query) {
-                    Ok(s) => s,
-                    Err(_) => return -1,
-                };
-
-                let expected_ips = if !c_config.dns_expected_ips.is_null()
-                    && c_config.dns_expected_ips_count > 0
-                {
-                    let ips_slice = std::slice::from_raw_parts(
-                        c_config.dns_expected_ips,
-                        c_config.dns_expected_ips_count,
-                    );
-
-                    let mut ips = Vec::new();
-                    for ip_ptr in ips_slice {
-                        if let Ok(ip_str) = parse_c_string(*ip_ptr)
-                            && let Ok(ip) = ip_str.parse::<IpAddr>()
-                        {
-                            ips.push(ip);
-                        }
-                    }
-                    ips
-                } else {
-                    vec![]
-                };
-
-                Arc::new(DnsChecker::new(
-                    query,
-                    expected_ips,
-                    Duration::from_millis(c_config.timeout_ms),
-                ))
-            }
-            _ => return -1,
-        };
-
-        // Perform the check
-        let check_result = runtime.block_on(async { checker_result.check().await });
-
-        // Convert to C result
         *result = CHealthCheckResult {
             status: check_result.status.into(),
             duration_ms: check_result.duration.as_millis() as u64,

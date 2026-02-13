@@ -355,9 +355,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_init_transition_owner() {
-        let mut config = VRRPConfig::default();
-        config.vrid = 1;
-        config.priority = 255; // IP owner
+        let mut config = VRRPConfig {
+            vrid: 1,
+            priority: 255, // IP owner
+            ..Default::default()
+        };
         config.virtual_ips.push("192.168.1.1".parse().unwrap());
 
         // This will fail without root/CAP_NET_ADMIN, but tests the code path

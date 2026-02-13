@@ -254,7 +254,7 @@ fn test_multiple_destinations() {
         );
         manager
             .add_destination(&service, &dest)
-            .expect(&format!("Failed to add destination {}", i));
+            .unwrap_or_else(|_| panic!("Failed to add destination {}", i));
     }
 
     println!("✓ All 3 destinations added");
